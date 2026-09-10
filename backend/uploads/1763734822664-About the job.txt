@@ -1,0 +1,38 @@
+About the job
+About the Role
+We are looking for a Python based Software Engineer who can design, build, and maintain scalable backend systems and AI-powered features. You will be responsible for architecting well-structured Python applications, implementing clean and efficient code, and ensuring smooth deployment through Dockerized environments. This role requires a strong foundation in software engineering principles, including modular design, API development, testing, debugging, performance optimization, and reliable release processes. You should be comfortable owning Python services end-to-end, from initial development to containerization and basic production deployment.
+
+
+Key Responsibilities
+Design, develop, and maintain Python-based backend services and scalable APIs that follow clean architecture principles.
+Build and integrate AI-powered applications including AI Agents, RAG workflows, voice agents, and other intelligent automation components.
+Create modular, maintainable, and reusable Python components that support both backend logic and AI-driven functionalities.
+Implement thorough testing, monitoring, performance tuning, and error-handling practices for all backend and AI-related systems.
+Contribute to architectural decisions, ensuring long-term reliability, scalability, and extensibility of core systems.
+
+
+Must-Have Skills & Experience
+2–5 years of professional experience in backend development using Python.
+Fundamental Python skills are a must - grasp of data structures (lists, dicts, sets, tuples), OOP concepts and modular code organization, use of the standard library (e.g., asyncio, logging, pathlib, etc.) and exception handling, type hints, and virtual environments
+Experience with at least one Python web framework such as FastAPI, Django, or Flask.
+Hands-on experience with Docker
+Experience building and consuming RESTful APIs.
+Good understanding of databases (SQL or NoSQL) and ORMs.
+Familiarity with Git and standard development workflows (branching, PRs, code reviews).
+AI-assisted coding is a must-have. Regular use of tools like Cursor, Claude Code, Codex (or similar) in real projects. Comfortable relying on these tools to speed up development while maintaining code quality.
+Strong ownership mindset and problem-solving skills.
+Good written and verbal communication skills in English.
+
+
+Nice-to-Have
+Experience with LLMs beyond just calling APIs, such as:
+Understanding and building RAG (Retrieval-Augmented Generation) pipelines
+Working with AI Agents / multi-step tool-calling workflows
+Basic understanding of LLM internals (tokenization, context window, temperature/top-p, fine-tuning vs. prompting, etc.)
+Experience with CI/CD pipelines (e.g., GitHub Actions, GitLab CI).
+
+
+
+
+Education
+Bachelor’s degree in Computer Science, Engineering, Math, or related field or equivalent practical experience.

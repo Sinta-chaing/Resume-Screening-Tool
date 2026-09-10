@@ -1,0 +1,25 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+pnpm-lock.yaml
+.env
+*.env.local
+/dist
+/build
+/.parcel-cache
+/.cache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Logs
+logs
+*.log
+
+# Optional
+*.zip
