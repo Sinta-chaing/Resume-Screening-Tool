@@ -405,16 +405,16 @@ Add these in **Settings → Secrets and variables → Actions**:
    sudo cp backend/.env.example /opt/resume-screener/.env   # then edit it
    ```
    Follow section 5 for the values. The API container reads this list via
-   `--env-file`; set `DB_HOST` to wherever your PostgreSQL runs (e.g.
-   `127.0.0.1` if the DB is on the same host, or a container on a shared
-   Docker network).
+   `--env-file` and runs with **host networking** (`--network host`), so set
+   `DB_HOST=127.0.0.1` and `OLLAMA_BASE_URL=http://localhost:11434` — both the
+   DB and Ollama live on the host, reachable via `localhost`.
 4. PostgreSQL + pgvector must already exist (section 3). With plain `docker run`
    the DB is **not** started by the deploy — run it separately, e.g.:
    ```bash
    docker run -d --name resume-db \
      --restart unless-stopped \
      -p 5432:5432 \
-     -e POSTGRES_USER=resume_app \
+     -e POSTGRES_USER=postgres \
      -e POSTGRES_PASSWORD=<STRONG_DB_PASSWORD> \
      -e POSTGRES_DB=resume_screener \
      pgvector/pgvector:pg18

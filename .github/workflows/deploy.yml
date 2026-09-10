@@ -53,15 +53,16 @@ jobs:
 
           # Run migrations against the shared DB first
           docker run --rm \
+            --network host \
             --env-file /opt/resume-screener/.env \
             ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest \
             sh -c "wait-for-db && python manage.py migrate --noinput"
 
-          # Start the server
+          # Start the server (host networking: DB + Ollama live on the host)
           docker run -d \
             --name resume-screener \
             --restart unless-stopped \
-            -p 8000:8000 \
+            --network host \
             --env-file /opt/resume-screener/.env \
             ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
 
