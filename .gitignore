@@ -9,6 +9,24 @@ pnpm-lock.yaml
 /build
 /.parcel-cache
 /.cache
+.next/
+
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+backend/env/
+frontend/env/
+
+# Django
+backend/staticfiles/
+
+# TypeScript / build tsbuildinfo
+*.tsbuildinfo
+
+# Environment files
+backend/.env
+frontend/.env.local
 
 # OS files
 .DS_Store

@@ -1,147 +1,219 @@
-# 📘 Resume Screening Tool (RAG + LLM Powered)
+# Resume Screening Tool (RAG + LLM Powered)
 
-An AI-powered resume-analysis system that evaluates resumes against job descriptions using **Retrieval-Augmented Generation (RAG)**, **embeddings**, and **Large Language Models (LLMs)**.  
-The tool identifies **match scores, strengths, gaps, missing skills**, and allows interactive Q&A with contextual retrieval.
+AI-powered resume analysis against job descriptions using **Retrieval-Augmented Generation (RAG)**, **embeddings**, and **local Ollama LLMs**.
 
----
+## Stack (Current)
 
-## 🚀 Key Features
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 15, TypeScript, React, App Router |
+| Backend | Django 5, Django REST Framework, Python |
+| AI | Ollama (`mxbai-embed-large`, `llama3.2`) |
 
-### ✅ **1. Resume + Job Description Upload**  
-Upload files in **PDF or TXT** formats. The system automatically extracts clean text using a PDF parser.
+## Project Structure
 
-### ✅ **2. Embedding-Based Matching**  
-The resume and job description are chunked and converted into vector embeddings using either:
-
-- **Ollama local models** (e.g., Llama 2, nomic-embed-text)  
-- **OpenAI models** (`text-embedding-3-small`, GPT models)
-
-A cosine similarity algorithm computes a **resume vs. JD match score**.
-
-### ✅ **3. RAG-Powered Chat**  
-Ask questions about the resume or job description:  
-- “Does the candidate have React experience?”  
-- “What are the candidate’s strengths for this role?”
-
-The system retrieves relevant chunks and sends them to an LLM for precise, context-aware responses.
-
-### ✅ **4. Gap & Strength Analysis**  
-LLM identifies:  
-- Missing keywords  
-- Skill mismatches  
-- Areas of strength  
-- Experience alignment with job requirements  
-
-### ✅ **5. Frontend UI Dashboard**  
-A clean, minimal React interface to:  
-- Upload files  
-- View match scores  
-- Explore gaps and strengths  
-- Interact with the built-in chat assistant  
-
----
-
-## 🏗️ System Architecture
-
-```
-          ┌─────────────────────┐
-          │      Frontend       │ (React + Vite)
-          │  File Upload + UI   │
-          └─────────┬───────────┘
-                    │ REST API
-                    ▼
-        ┌─────────────────────────────┐
-        │          Backend            │ Node.js + Express + TypeScript
-        │  - File parsing (PDF/TXT)   │
-        │  - Chunking                 │
-        │  - Embeddings               │
-        │  - Vector similarity        │
-        │  - RAG context builder      │
-        └──────────┬──────────────────┘
-                   │ LLM/Embedding Provider
-                   ▼
-       ┌───────────────────────────────┐
-       │      LLM / Embedding Tier     │
-       │  • Ollama (local models)      │
-       │        - llama2, nomic        │
-       │  • OpenAI API                 │
-       │        - GPT-4o-mini          │
-       │        - text-embedding-3     │
-       └───────────────────────────────┘
+```text
+Resume-Screening-Tool/
+├── backend/                 # Django REST API (port 4000)
+│   ├── config/
+│   ├── screening/
+│   │   ├── views.py
+│   │   └── services/
+│   ├── manage.py
+│   └── requirements.txt
+├── frontend/                # Next.js UI (port 3000)
+│   ├── app/
+│   ├── lib/
+│   └── types/
+├── backend-node/            # Reference: original Express backend
+├── frontend-vite/           # Reference: original Vite frontend
+└── sample-data/             # Test resume + JD files
 ```
 
----
+## Prerequisites
 
-## 🧠 How the RAG Pipeline Works
+- Python 3.12+
+- Node.js 18+
+- Ollama running locally with models pulled:
+  ```powershell
+  ollama pull mxbai-embed-large
+  ollama pull llama3.2
+  ```
 
-1. **Extract**: Text is extracted from resume and job description.  
-2. **Chunk**: Documents are split into manageable sections.  
-3. **Embed**: Embeddings generated using Ollama or OpenAI.  
-4. **Store**: Embeddings stored in an in-memory vector store.  
-5. **Retrieve**: When analyzing or answering questions, top-K relevant chunks are retrieved.  
-6. **Generate**: Retrieved context is passed to the LLM to produce final outputs.
+## Backend Setup
 
----
+```powershell
+cd backend
+python -m venv env
+.\env\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env
+python manage.py migrate
+python manage.py runserver 4000
+```
 
-## 🛠️ Tech Stack
+Backend: http://localhost:4000
 
-### **Frontend**
-- React (Vite)
-- TypeScript
+## Frontend Setup
 
-### **Backend**
-- Node.js + Express
-- TypeScript
-- pdf-parse
-- cosine similarity
-- express-fileupload
+```powershell
+cd frontend
+npm install
+copy .env.local.example .env.local
+npm run dev
+```
 
-### **AI Models**
-Supports both:
-- **Local LLMs (Ollama)**  
-- **Cloud LLMs (OpenAI)**
+Frontend: http://localhost:3000
 
----
+## Environment Variables
 
-## 🌟 Core Use Cases
+### Backend (`backend/.env`)
 
-- Automating resume screening for HR teams  
-- Filtering candidates against specific job requirements  
-- Highlighting missing or required skills  
-- AI-driven recruitment assistance  
-- Chat-based resume Q&A  
-- Candidate scoring & ranking  
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `DEBUG` | `True` | Django debug mode |
+| `SECRET_KEY` | `change-me` | Django secret key |
+| `DB_NAME` | `resume_screener` | PostgreSQL database name |
+| `DB_USER` | `postgres` | PostgreSQL user |
+| `DB_PASSWORD` | *(your password)* | PostgreSQL password |
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `USE_OLLAMA` | `true` | Flag exposed in health endpoint |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API base URL |
+| `EMBEDDING_MODEL` | `mxbai-embed-large` | Embedding model name (1024-dim) |
+| `CHAT_MODEL` | `llama3.2` | Chat/generation model name |
 
----
+### Frontend (`frontend/.env.local`)
 
-## 📄 Output Summary
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:4000` | Django backend URL |
 
-After uploading files, the tool provides:
+## API Endpoints
 
-- **Overall match score (0–100%)**
-- **Strengths based on resume**
-- **Skill gaps / missing JD requirements**
-- **Relevant experience extracted from the resume**
-- **Chat-style answers referencing resume content**
+### GET `/api/health`
 
----
+```json
+{
+  "ok": true,
+  "useOllama": "true",
+  "ollamaBaseUrl": "http://localhost:11434",
+  "embeddingModel": "mxbai-embed-large",
+  "chatModel": "llama3.2"
+}
+```
 
-## 📌 RAG + LLM Advantages
+### POST `/api/analyze`
 
-- More accurate than simple keyword matching  
-- Understands **context**, not just text  
-- Gives structured explanations  
-- Improves recruiter productivity  
-- Works offline with Ollama, or cloud-based with OpenAI  
+**Request:** `multipart/form-data` with fields `resume` and `jd` (PDF or TXT)
 
----
+**Response:**
 
-## 🧰 Extensibility
+```json
+{
+  "ok": true,
+  "sessionId": "uuid-here",
+  "chunks": 1,
+  "evaluation": {
+    "score": 60,
+    "strengths": ["..."],
+    "gaps": ["..."],
+    "suggestions": ["..."]
+  },
+  "resumeSummary": "..."
+}
+```
 
-You can extend the system to include:
+### POST `/api/chat`
 
-- PostgreSQL / MongoDB resume history  
-- Pinecone / Chroma vector DB  
-- ATS integrations  
-- Full Docker deployment  
-- Fine-tuned LLM scoring models  
+**Request:**
+
+```json
+{ "question": "Does the candidate have Python experience?", "sessionId": "uuid-from-analyze" }
+```
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "answer": "...",
+  "sources": [
+    { "id": "resume-0", "score": 0.71, "preview": "..." }
+  ]
+}
+```
+
+## Migration Notes
+
+### What was migrated
+
+- **Backend:** Express/TypeScript → Django REST Framework/Python
+  - PDF extraction: `pdf-parse` → PyMuPDF
+  - Chunking: 1800-char fixed slices (from `chunkText.ts`)
+  - Embeddings/chat: Ollama HTTP API (same endpoints)
+  - Vector store: in-memory cosine similarity (top 4 chunks)
+  - ATS evaluation: same LLM prompt + JSON parsing with fallback
+
+- **Frontend:** Vite/React → Next.js App Router/TypeScript
+  - Same UI layout and dark theme CSS
+  - CSS classes aligned with stylesheet (`.app`, `.grid2`, `.chip`, etc.)
+  - Added chat sources panel showing retrieved chunks and scores
+
+### Behavior preserved
+
+- Same API contract (`/api/health`, `/api/analyze`, `/api/chat`)
+- Same form field names (`resume`, `jd`)
+- Same RAG flow (analyze first, then chat)
+- Same evaluation output structure
+- PDF and TXT file support
+
+### Behavior changes
+
+- Frontend runs on port **3000** (was 5173 with Vite)
+- Chat UI now displays retrieved **sources** with similarity scores
+- CSS styling is fully applied (fixed class name mismatch from Vite version)
+- `/api/analyze` returns **`resumeSummary`** (LLM-generated candidate overview) instead of raw `resumePreview` text
+- **Scanned/image-only PDFs** (no text layer) are now supported via RapidOCR fallback (`rapidocr` + `onnxruntime`)
+- Clearer `400` error identifies which uploaded file had no readable text
+
+## Testing Results
+
+Verified on migration date:
+
+| Test | Result |
+|------|--------|
+| Django starts on :4000 | Pass |
+| GET `/api/health` | Pass |
+| POST `/api/analyze` (sample TXT files) | Pass — score 60, structured evaluation |
+| POST `/api/chat` (after analyze) | Pass — answer + 1 source |
+| 400 on missing files | Pass |
+| 400 on missing question | Pass |
+| Next.js build | Pass |
+| Next.js dev server on :3000 | Pass (HTTP 200) |
+| Ollama embeddings + chat | Pass |
+
+## Reference Implementations
+
+The original working stack is preserved for comparison:
+
+- `backend-node/` — Express + TypeScript backend
+- `frontend-vite/` — Vite + React frontend
+
+Remove these only after you have fully validated the new stack in your environment.
+
+## Scripts
+
+### Backend
+
+```powershell
+python manage.py runserver 4000
+```
+
+### Frontend
+
+```powershell
+npm run dev      # development
+npm run build    # production build
+npm run start    # production server
+```

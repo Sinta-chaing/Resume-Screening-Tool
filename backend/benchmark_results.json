@@ -1,0 +1,22 @@
+[
+  {
+    "embed": "mxbai-embed-large",
+    "chat": "llama3.2",
+    "status": "ok",
+    "score": 77,
+    "skill_overlap": 80,
+    "embed_sim": 71,
+    "matched": 4,
+    "missing": 1,
+    "jd_requirements": 5,
+    "strengths": 3,
+    "gaps": 3,
+    "suggestions": 3,
+    "time_chunks": 9.700000191514846e-06,
+    "time_embed": 6.885332599999856,
+    "time_score": 6.275101799999902,
+    "time_narrative": 14.824908300000061,
+    "time_summary": 6.632977100000062,
+    "time_total": 34.61834790000012
+  }
+]

@@ -1,0 +1,46 @@
+# Backend + PostgreSQL (pgvector) for production-like local Docker hosting.
+# Ollama is NOT included here (GPU/VRAM dependent) - see docker-compose.full.yml.
+#
+# Usage:
+#   cp backend/.env.example backend/.env   # then set at least:
+#     DB_HOST=db                            # connect to the docker service, not 127.0.0.1
+#   docker compose up -d --build
+#   curl http://localhost:8000/api/health
+
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_DB: ${DB_NAME:-resume_screener}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    ports:
+      - "5433:5432"            # host port 5433 avoids clashing with a local PostgreSQL
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-resume_screener}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Reach an Ollama running on the host (plain compose). Set
+      # OLLAMA_BASE_URL=http://ollama:11434 when using docker-compose.full.yml.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

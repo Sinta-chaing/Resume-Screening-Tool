@@ -1,0 +1,68 @@
+# Same as docker-compose.yml PLUS an Ollama service.
+#
+# Ollama inside Docker needs a compatible runtime and model downloads are large.
+# On Linux with an NVIDIA GPU, install nvidia-container-toolkit first; on the
+# desktop app (Docker Desktop / WSL2) GPU pass-through usually works out of the box.
+# CPU-only hosts work but analysis will be slow.
+#
+# Usage:
+#   docker compose -f docker-compose.full.yml up -d --build
+#   docker compose -f docker-compose.full.yml exec ollama ollama pull llama3.2
+#   docker compose -f docker-compose.full.yml exec ollama ollama pull mxbai-embed-large
+
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_DB: ${DB_NAME:-resume_screener}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-resume_screener}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    # NVIDIA GPU example (requires nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
+  ollama_data:
