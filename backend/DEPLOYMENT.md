@@ -361,3 +361,32 @@ Notes:
   `docker-compose.full.yml` (requires `nvidia-container-toolkit`).
 - Set `OLLAMA_BASE_URL=http://ollama:11434` if using the full file; on the plain
   `docker-compose.yml`, point `OLLAMA_BASE_URL` at your existing Ollama server instead.
+
+---
+
+## 14. Continuous Deployment (GitHub Actions)
+
+`.github/workflows/deploy.yml` deploys automatically after **every successful CI
+run** on `main`, or manually via the **Actions → Deploy → Run workflow** button.
+It:
+
+1. Connects to the server over SSH (`appleboy/ssh-action`)
+2. Clones the repo to `/opt/resume-screener` on first run (and creates the venv)
+3. Runs `git fetch` + `git reset --hard origin/main`
+4. Installs `requirements.txt`, then runs `migrate` and `collectstatic`
+5. Restarts the `resume-screener` systemd unit (`DEPLOYMENT.md` section 7)
+6. Health-checks `http://127.0.0.1:8000/api/health` (fails the job if unreachable)
+
+### Required repository secrets
+
+Add these in **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|-------|
+| `DEPLOY_HOST` | Server IP or hostname |
+| `DEPLOY_USER` | SSH user with passwordless `sudo` |
+| `DEPLOY_SSH_KEY` | Private key (OpenSSH format) for that user |
+| `DEPLOY_PORT` | SSH port (defaults to `22` if unset) |
+
+> The `.env` file is never committed; the deploy only copies `.env.example`,
+> so complete the real `.env` on the server (section 5) before the first deploy.
