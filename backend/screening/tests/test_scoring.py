@@ -84,10 +84,12 @@ class RequirementMatchTests(SimpleTestCase):
         self.assertIn("Python", result["matchedSkills"])
         self.assertIn("Kubernetes", result["missingSkills"])
 
-    def test_empty_jd_returns_zero_score(self):
-        result = requirement_match_score("Python", "")
+    @patch("screening.services.scoring.embed")
+    def test_empty_jd_returns_zero_score(self, mock_embed):
+        result = requirement_match_score("Python", "", resume_embeddings=[[0.5]])
         self.assertEqual(result["score"], 0.0)
         self.assertEqual(result["jdSkillCount"], 0)
+        mock_embed.assert_not_called()
 
 
 class HybridScoreTests(SimpleTestCase):
