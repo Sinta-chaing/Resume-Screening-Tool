@@ -215,9 +215,42 @@ journalctl -u resume-screener -f   # watch logs
 
 ---
 
-## 8. Nginx reverse proxy
+## 8. Public exposure with Cloudflare Tunnel (no open ports)
 
-Create `/etc/nginx/sites-available/resume-screener`:
+The server sits behind a provider firewall where port 80/443 could not be opened
+inbound, so the production setup uses a **Cloudflare Tunnel**: the server dials
+**out** to Cloudflare, and Cloudflare terminates HTTPS at its edge (`datasciences.engineer`).
+
+> Nginx + Certbot is an alternative only if inbound 80/443 are reachable from the
+> internet — then use the Nginx config below and `sudo certbot --nginx -d <domain>`.
+
+### Tunnel setup (one-time)
+
+```bash
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+sudo dpkg -i cloudflared.deb
+```
+
+At `https://one.dash.cloudflare.com → Zero Trust → Networks → Tunnels`:
+
+1. **Create a tunnel** (`resume-screener`) → copy the install token
+2. On the server: `sudo cloudflared service install <TOKEN>` then
+   `sudo systemctl enable --now cloudflared`
+3. In the dashboard, under the tunnel → **Public Hostname → Add**:
+   - Domain: `datasciences.engineer`, Subdomain: *(empty)*
+   - Service: **HTTP** → `localhost:8000`
+4. Cloudflare DNS → delete any stale `A` record for the bare domain
+   (the tunnel adds its own CNAME automatically)
+5. **SSL/TLS → Overview** → encryption mode **Full (strict)**
+
+Result: `https://datasciences.engineer/api/health` proxies to the Docker
+container on `127.0.0.1:8000`. No ports are exposed to the internet.
+
+> Cloudflare's free proxy times out requests around 100s. `POST /api/analyze`
+> does several CPU-Ollama calls and can exceed that — acceptable for internal
+> use; for production, use an Nginx/orthodox setup or a dedicated LLM box.
+
+### Alternative: Nginx reverse proxy (if ports are open)
 
 ```nginx
 server {
@@ -237,20 +270,11 @@ server {
 }
 ```
 
-Enable and reload:
-
 ```bash
 sudo ln -s /etc/nginx/sites-available/resume-screener /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### TLS (use Certbot)
-
-```bash
+sudo nginx -t && sudo systemctl reload nginx
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d api.yourdomain.com
-sudo systemctl status certbot.timer   # auto-renew
 ```
 
 ---
@@ -379,6 +403,23 @@ The pipeline is split into two workflows:
   3. On a **self-hosted runner** on the server: pulls the image, runs
      `migrate --noinput` in a throwaway container, then starts
      `resume-screener` (port `8000`, auto-restart) and health-checks it
+
+How deployment works on the server (all under the `sinta` user):
+
+| Piece | Runs as | Where |
+|-------|---------|-------|
+| API container | Docker | `dorkertosinta/resume-screener:latest`, host networking, port `8000` |
+| Database | Docker | `pgvector/pgvector:pg18` container `resume-db`, port `5432` |
+| Ollama | systemd | `ollama.service`, `localhost:11434` |
+| Tunnel | systemd | `cloudflared.service`, `datasciences.engineer` → `localhost:8000` |
+| Runner | systemd | `actions.runner.Sinta...service`, at `/home/sinta/` |
+
+A push to `main` runs **CI** (tests) and **Deploy** (build → push → pull →
+migrate → start → health check) in parallel.
+
+> **Gotcha:** `ALLOWED_HOSTS` / `DB_*` / `OLLAMA_*` are read by the container at
+> **creation** (`docker run`), so after editing `.env` you must recreate, not
+> just `docker restart` the container.
 
 ### Required repository secrets
 
