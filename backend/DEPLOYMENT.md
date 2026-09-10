@@ -364,18 +364,21 @@ Notes:
 
 ---
 
-## 14. Continuous Deployment (GitHub Actions)
+## 14. Continuous Deployment (GitHub Actions + Docker Hub)
 
-`.github/workflows/deploy.yml` deploys automatically after **every successful CI
-run** on `main`, or manually via the **Actions → Deploy → Run workflow** button.
-It:
+The pipeline is split into two workflows:
 
-1. Connects to the server over SSH (`appleboy/ssh-action`)
-2. Clones the repo to `/opt/resume-screener` on first run (and creates the venv)
-3. Runs `git fetch` + `git reset --hard origin/main`
-4. Installs `requirements.txt`, then runs `migrate` and `collectstatic`
-5. Restarts the `resume-screener` systemd unit (`DEPLOYMENT.md` section 7)
-6. Health-checks `http://127.0.0.1:8000/api/health` (fails the job if unreachable)
+- **`.github/workflows/ci.yml`** — runs the backend test suite on every push/PR.
+- **`.github/workflows/deploy.yml`** — builds the Docker image, pushes it to
+  Docker Hub, and deploys on **main**, on `v*` git tags, or manually via
+  **Actions → Deploy → Run workflow**. It:
+
+  1. Logs in to Docker Hub with `docker/login-action`
+  2. Builds the image from `backend/` (the `Dockerfile` in section 13's file)
+     and pushes `latest` (and additionally tags `v*` tags with a version tag)
+  3. On a **self-hosted runner** on the server: pulls the image, runs
+     `migrate --noinput` in a throwaway container, then starts
+     `resume-screener` (port `8000`, auto-restart) and health-checks it
 
 ### Required repository secrets
 
@@ -383,10 +386,44 @@ Add these in **Settings → Secrets and variables → Actions**:
 
 | Secret | Value |
 |--------|-------|
-| `DEPLOY_HOST` | Server IP or hostname |
-| `DEPLOY_USER` | SSH user with passwordless `sudo` |
-| `DEPLOY_SSH_KEY` | Private key (OpenSSH format) for that user |
-| `DEPLOY_PORT` | SSH port (defaults to `22` if unset) |
+| `DOCKER_USERNAME` | Docker Hub username (used as the image namespace) |
+| `DOCKER_PASSWORD` | Docker Hub access token (or password) |
 
-> The `.env` file is never committed; the deploy only copies `.env.example`,
-> so complete the real `.env` on the server (section 5) before the first deploy.
+### Server prerequisites (self-hosted runner)
+
+1. **Docker** on the server:
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   ```
+2. **Register a self-hosted runner** on the server with the
+   `self-hosted` label so the `deploy` job picks it up (Settings → Actions →
+   Runners → New self-hosted runner; run the `config` script it prints as a
+   service).
+3. **Create the env file** once (never committed):
+   ```bash
+   sudo mkdir -p /opt/resume-screener
+   sudo cp backend/.env.example /opt/resume-screener/.env   # then edit it
+   ```
+   Follow section 5 for the values. The API container reads this list via
+   `--env-file`; set `DB_HOST` to wherever your PostgreSQL runs (e.g.
+   `127.0.0.1` if the DB is on the same host, or a container on a shared
+   Docker network).
+4. PostgreSQL + pgvector must already exist (section 3). With plain `docker run`
+   the DB is **not** started by the deploy — run it separately, e.g.:
+   ```bash
+   docker run -d --name resume-db \
+     --restart unless-stopped \
+     -p 5432:5432 \
+     -e POSTGRES_USER=resume_app \
+     -e POSTGRES_PASSWORD=<STRONG_DB_PASSWORD> \
+     -e POSTGRES_DB=resume_screener \
+     pgvector/pgvector:pg18
+   ```
+5. Nginx (section 8) or your reverse proxy keeps proxying `127.0.0.1:8000`,
+   so the Docker deployment is invisible to clients.
+
+> The `.env` file is never committed. Container secrets (DB password, etc.)
+> live only in `/opt/resume-screener/.env` on the server.
+>
+> The deploy job is skipped while `DOCKER_USERNAME` is unset, so it is safe to
+> push before adding the Docker Hub secrets.
