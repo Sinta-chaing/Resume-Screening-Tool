@@ -425,5 +425,5 @@ Add these in **Settings → Secrets and variables → Actions**:
 > The `.env` file is never committed. Container secrets (DB password, etc.)
 > live only in `/opt/resume-screener/.env` on the server.
 >
-> The deploy job is skipped while `DOCKER_USERNAME` is unset, so it is safe to
-> push before adding the Docker Hub secrets.
+> Add the `DOCKER_USERNAME` / `DOCKER_PASSWORD` secrets **before** running the
+> workflow — the build job fails without them.
