@@ -34,53 +34,84 @@ class HealthTests(TestCase):
 
 
 class AnalyzeTests(TestCase):
+    @patch("screening.views.queue_analysis")
     @patch(
-        "screening.views.extract_record_metadata",
+        "screening.views.extract_text_from_file",
+        side_effect=["Python developer with machine learning experience", "Python engineer role"],
+    )
+    def test_analyze_queues_job_and_returns_202(self, mock_extract, mock_queue):
+        resp = self.client.post(reverse("analyze"), {"resume": pdf_file(), "jd": text_file()})
+        self.assertEqual(resp.status_code, 202)
+
+        data = resp.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["status"], "pending")
+        self.assertNotIn("evaluation", data)
+
+        self.assertEqual(mock_queue.call_count, 1)
+        session_id, resume_text, jd_text, resume_fn, jd_fn = mock_queue.call_args.args
+        self.assertEqual(resume_text, "Python developer with machine learning experience")
+        self.assertEqual(jd_text, "Python engineer role")
+        self.assertEqual(resume_fn, "Alex_Chen-CV.pdf")
+
+        session = AnalysisSession.objects.get(pk=session_id)
+        self.assertEqual(session.status, AnalysisSession.Status.PENDING)
+        self.assertEqual(session.chunk_count, 0)
+
+    def test_analyze_requires_files(self):
+        resp = self.client.post(reverse("analyze"), {})
+        self.assertEqual(resp.status_code, 400)
+
+
+class AnalysisJobTests(TestCase):
+    @patch(
+        "screening.services.analysis_job.extract_record_metadata",
         return_value={"candidate_name": "Alex Chen", "position": "AI Engineer"},
     )
-    @patch("screening.views.summarize_resume", return_value="A solid Python candidate.")
+    @patch("screening.services.analysis_job.summarize_resume", return_value="A solid Python candidate.")
     @patch(
-        "screening.views.evaluate_resume",
+        "screening.services.analysis_job.evaluate_resume",
         return_value={
             "score": 80,
             "scoreBreakdown": {
                 "skillOverlap": 80,
                 "embeddingSimilarity": 80,
-                "skillWeight": 0.7,
-                "embeddingWeight": 0.3,
                 "matchedSkills": ["Python"],
-                "missingSkills": [],
-                "jdSkillCount": 1,
-                "semanticThreshold": 0.62,
             },
             "strengths": ["Strong Python"],
             "gaps": [],
             "suggestions": [],
         },
     )
-    @patch("screening.views.embed", return_value=EMB)
-    @patch(
-        "screening.views.extract_text_from_file",
-        side_effect=["Python developer with machine learning experience", "Python engineer role"],
-    )
-    def test_analyze_creates_session_and_chunks(self, *mocks):
-        resp = self.client.post(reverse("analyze"), {"resume": pdf_file(), "jd": text_file()})
-        self.assertEqual(resp.status_code, 200)
+    @patch("screening.services.analysis_job.embed", return_value=EMB)
+    @patch("screening.services.analysis_job.chunk_text", return_value=["Python developer"])
+    def test_analysis_job_completes_session(self, *mocks):
+        session = AnalysisSession.objects.create(resume_filename="r.pdf", jd_filename="j.txt")
 
-        data = resp.json()
-        self.assertTrue(data["ok"])
-        self.assertEqual(data["candidateName"], "Alex Chen")
-        self.assertEqual(data["position"], "AI Engineer")
-        self.assertEqual(data["chunks"], 1)
+        from screening.services.analysis_job import _run_analysis
 
-        session = AnalysisSession.objects.get(pk=data["sessionId"])
+        _run_analysis(str(session.id), "Python developer", "Python engineer role", "r.pdf", "j.txt")
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, AnalysisSession.Status.COMPLETED)
+        self.assertEqual(session.candidate_name, "Alex Chen")
+        self.assertEqual(session.chunk_count, 1)
         chunks = ResumeChunk.objects.filter(session=session)
         self.assertEqual(chunks.count(), 1)
         self.assertEqual(len(chunks.first().embedding), 1024)
+        self.assertEqual(session.evaluation["score"], 80)
 
-    def test_analyze_requires_files(self):
-        resp = self.client.post(reverse("analyze"), {})
-        self.assertEqual(resp.status_code, 400)
+    @patch("screening.services.analysis_job.embed", side_effect=RuntimeError("ollama down"))
+    def test_analysis_job_marks_failed_on_error(self, mock_embed):
+        session = AnalysisSession.objects.create(resume_filename="r.pdf", jd_filename="j.txt")
+
+        from screening.services.analysis_job import _run_analysis
+
+        _run_analysis(str(session.id), "text", "jd", "r.pdf", "j.txt")
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, AnalysisSession.Status.FAILED)
+        self.assertIn("ollama down", session.error_message)
 
 
 class ChatTests(TestCase):

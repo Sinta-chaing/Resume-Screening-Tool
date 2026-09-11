@@ -4,14 +4,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .services.ats import evaluate_resume
+from .services.analysis_job import queue_analysis
 from .services.chat_context import answer_question
-from .services.chunking import chunk_text
-from .services.metadata import extract_record_metadata
-from .services.ollama import embed
 from .services.pdf_extractor import extract_text_from_file
-from .services.summary import summarize_resume
-from .services.vector_store import add_chunk, create_session, get_session
+from .services.vector_store import get_session
 from .models import AnalysisSession
 
 
@@ -29,6 +25,7 @@ def _serialize_record_summary(session: AnalysisSession) -> dict:
         "candidateName": session.candidate_name or session.resume_filename,
         "position": session.position or session.jd_filename,
         "score": _match_score(session.evaluation),
+        "status": session.status,
         "createdAt": session.created_at.isoformat(),
         "resumeFilename": session.resume_filename,
         "jdFilename": session.jd_filename,
@@ -44,6 +41,8 @@ def _serialize_record_detail(session: AnalysisSession) -> dict:
         "chunks": session.chunk_count,
         "evaluation": session.evaluation,
         "resumeSummary": session.resume_summary,
+        "status": session.status,
+        "error": session.error_message,
         "createdAt": session.created_at.isoformat(),
         "resumeFilename": session.resume_filename,
         "jdFilename": session.jd_filename,
@@ -94,39 +93,28 @@ class AnalyzeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            chunks = chunk_text(resume_text)
-            chunk_embeddings = [embed(chunk) for chunk in chunks]
-            evaluation = evaluate_resume(resume_text, jd_text, chunk_embeddings)
-            resume_summary = summarize_resume(resume_text)
-            metadata = extract_record_metadata(
+            session = AnalysisSession.objects.create(
+                resume_filename=resume_file.name,
+                jd_filename=jd_file.name,
+                status=AnalysisSession.Status.PENDING,
+            )
+
+            queue_analysis(
+                str(session.id),
                 resume_text,
                 jd_text,
                 resume_file.name,
                 jd_file.name,
             )
 
-            session = create_session(
-                resume_filename=resume_file.name,
-                jd_filename=jd_file.name,
-                evaluation=evaluation,
-                resume_summary=resume_summary,
-                chunk_count=len(chunks),
-                candidate_name=metadata["candidate_name"],
-                position=metadata["position"],
+            return Response(
+                {
+                    "ok": True,
+                    "sessionId": str(session.id),
+                    "status": session.status,
+                },
+                status=status.HTTP_202_ACCEPTED,
             )
-
-            for i, chunk in enumerate(chunks):
-                add_chunk(session, f"resume-{i}", chunk, chunk_embeddings[i])
-
-            return Response({
-                "ok": True,
-                "sessionId": str(session.id),
-                "chunks": len(chunks),
-                "evaluation": evaluation,
-                "resumeSummary": resume_summary,
-                "candidateName": session.candidate_name,
-                "position": session.position,
-            })
         except Exception as exc:
             return Response(
                 {"error": str(exc) or "analyze failed"},

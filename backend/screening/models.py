@@ -5,6 +5,12 @@ from pgvector.django import VectorField
 
 
 class AnalysisSession(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     resume_filename = models.CharField(max_length=255)
@@ -14,6 +20,12 @@ class AnalysisSession(models.Model):
     evaluation = models.JSONField(default=dict)
     resume_summary = models.TextField(blank=True)
     chunk_count = models.PositiveIntegerField(default=0)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    error_message = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]

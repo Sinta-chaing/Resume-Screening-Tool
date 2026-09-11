@@ -94,15 +94,14 @@ python manage.py runserver 4000
 
 ### POST `/api/analyze`
 
-Response now includes `sessionId` (UUID):
+Async (202): returns `sessionId` (UUID) and a `status`, then you poll
+`GET /api/records/<sessionId>` until `completed`:
 
 ```json
 {
   "ok": true,
   "sessionId": "a1b2c3d4-...",
-  "chunks": 1,
-  "evaluation": { ... },
-  "resumeSummary": "..."
+  "status": "pending"
 }
 ```
 
@@ -122,11 +121,30 @@ Embeddings are stored in PostgreSQL and retrieved via pgvector cosine distance �
 ## API endpoints
 
 - `GET /api/health` — liveness probe: `{ok, useOllama, ollamaBaseUrl, embeddingModel, chatModel}`
-- `POST /api/analyze` — multipart (`resume`, `jd`, PDF/TXT) → `{ok, sessionId, chunks, evaluation, resumeSummary, candidateName, position}`
-- `POST /api/chat` — JSON `{question, sessionId}` → RAG answer `{answer, sources[]}`
-- `GET /api/records?order=asc|desc` — list records sorted by score
-- `GET /api/records/<session_id>` — full detail for one record
+- `POST /api/analyze` — multipart (`resume`, `jd`, PDF/TXT) → **async**: returns `202` immediately with `{ok, sessionId, status}`; analysis runs in a background worker
+- `GET /api/records/<session_id>` — poll this endpoint until `status` becomes `completed`; then reads `evaluation` + `resumeSummary`
+- `POST /api/chat` — JSON `{question, sessionId}` → RAG answer `{answer, sources[]}` (requires a **completed** session)
+- `GET /api/records?order=asc|desc` — list records sorted by score (each includes `status`)
 - `DELETE /api/records/<session_id>` — delete a record
+
+### Async analyze flow (job + polling)
+
+`POST /api/analyze` is **asynchronous**: it validates and queues the heavy
+LLM work (PDF/OCR → embed → evaluate → summarize) in a background thread and
+returns `202 Accepted` right away.
+
+```
+1. POST /api/analyze  → 202 {"ok":true,"sessionId":"<uuid>","status":"pending"}
+2. GET  /api/records/<uuid>  → {"status":"processing", ...}   (repeat until done)
+3. GET  /api/records/<uuid>  → {"status":"completed","evaluation":{...},"resumeSummary":"..."}
+   (or "failed" with an "error" message)
+```
+
+- Jobs run **one at a time** (serialized) so a small server never loads two
+  LLM models at once.
+- `OLLAMA_*` calls pass `keep_alive: 0`, so models unload after every call,
+  keeping the container's RAM footprint low.
+- Sessions start `pending`; status transitions `pending → processing → completed/failed`.
 
 ## Reference
 
