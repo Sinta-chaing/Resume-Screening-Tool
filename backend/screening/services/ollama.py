@@ -13,6 +13,7 @@ def embed(text: str) -> list[float]:
         "model": settings.EMBEDDING_MODEL,
         "input": text,
         "truncate": True,
+        "keep_alive": 0,
     }
     response = requests.post(url, json=payload, timeout=120)
     if not response.ok:
@@ -32,6 +33,7 @@ def chat(messages: list[dict]) -> str:
         "prompt": prompt,
         "stream": False,
         "options": {"temperature": 0},
+        "keep_alive": 0,
     }
     response = requests.post(url, json=payload, timeout=900)
     if not response.ok:
