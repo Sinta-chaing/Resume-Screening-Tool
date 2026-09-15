@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "corsheaders",
     "screening",
 ]
@@ -39,7 +40,16 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
-TEMPLATES = []
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [],
+        },
+    },
+]
 
 WSGI_APPLICATION = "config.wsgi.application"
 
@@ -85,6 +95,21 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024
 
 REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Resume Screening Tool API",
+    "DESCRIPTION": (
+        "Upload a candidate's resume (PDF) and a job description. The service extracts text, "
+        "embeds it with Ollama, scores the match against the role, and lets you ask RAG questions "
+        "about the candidate. Analysis runs asynchronously - poll the record endpoint until the "
+        "status is 'completed'."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SCHEMA_PATH_PREFIX": r"/api/",
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 USE_OLLAMA = os.environ.get("USE_OLLAMA", "true")

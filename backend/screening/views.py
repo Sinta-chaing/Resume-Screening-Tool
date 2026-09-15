@@ -1,8 +1,9 @@
 from django.conf import settings
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, OpenApiResponse, extend_schema, inline_serializer
 
 from .services.analysis_job import queue_analysis
 from .services.chat_context import answer_question
@@ -17,6 +18,10 @@ def _match_score(evaluation: dict) -> int:
         return int(score)
     except (TypeError, ValueError):
         return 0
+
+
+def _error_response(msg: str) -> OpenApiResponse:
+    return OpenApiResponse(description=msg)
 
 
 def _serialize_record_summary(session: AnalysisSession) -> dict:
@@ -50,6 +55,23 @@ def _serialize_record_detail(session: AnalysisSession) -> dict:
 
 
 class HealthView(APIView):
+    @extend_schema(
+        tags=["Health"],
+        summary="Service health",
+        description="Returns service status and the Ollama models in use.",
+        responses={
+            200: inline_serializer(
+                "HealthResponse",
+                fields={
+                    "ok": serializers.BooleanField(),
+                    "useOllama": serializers.CharField(),
+                    "ollamaBaseUrl": serializers.CharField(),
+                    "embeddingModel": serializers.CharField(),
+                    "chatModel": serializers.CharField(),
+                },
+            )
+        },
+    )
     def get(self, request: Request) -> Response:
         return Response({
             "ok": True,
@@ -61,6 +83,34 @@ class HealthView(APIView):
 
 
 class AnalyzeView(APIView):
+    @extend_schema(
+        tags=["Screening"],
+        summary="Analyze a resume against a job description",
+        description=(
+            "Upload the candidate's resume (PDF) and a job description (PDF or text). "
+            "Analysis starts in the background; returns immediately with a sessionId. "
+            "Poll GET /api/records/{sessionId} until status is 'completed'."
+        ),
+        request=inline_serializer(
+            "AnalyzeRequest",
+            fields={
+                "resume": serializers.FileField(required=True, write_only=True),
+                "jd": serializers.FileField(required=True, write_only=True),
+            },
+        ),
+        responses={
+            202: inline_serializer(
+                "AnalyzeResponse",
+                fields={
+                    "ok": serializers.BooleanField(),
+                    "sessionId": serializers.UUIDField(),
+                    "status": serializers.CharField(),
+                },
+            ),
+            400: _error_response("Both resume and jd files are required, or a file has no readable text."),
+            500: _error_response("Internal error while extracting text or queuing the job."),
+        },
+    )
     def post(self, request: Request) -> Response:
         try:
             resume_file = request.FILES.get("resume")
@@ -123,6 +173,43 @@ class AnalyzeView(APIView):
 
 
 class ChatView(APIView):
+    @extend_schema(
+        tags=["Screening"],
+        summary="Ask a RAG question about an analyzed resume",
+        description=(
+            "Requires a completed analysis session. The answer is grounded in the resume's "
+            "embedded chunks."
+        ),
+        request=inline_serializer(
+            "ChatRequest",
+            fields={
+                "question": serializers.CharField(required=True),
+                "sessionId": serializers.UUIDField(required=True),
+            },
+        ),
+        responses={
+            200: inline_serializer(
+                "ChatResponse",
+                fields={
+                    "ok": serializers.BooleanField(),
+                    "answer": serializers.CharField(),
+                    "sources": serializers.ListField(
+                        child=inline_serializer(
+                            "Source",
+                            fields={
+                                "sessionId": serializers.UUIDField(),
+                                "chunkKey": serializers.CharField(),
+                                "chunkIndex": serializers.IntegerField(),
+                                "text": serializers.CharField(),
+                            },
+                        )
+                    ),
+                },
+            ),
+            400: _error_response("Missing question/sessionId, or unknown sessionId."),
+            500: _error_response("Internal error while answering."),
+        },
+    )
     def post(self, request: Request) -> Response:
         try:
             question = request.data.get("question")
@@ -162,6 +249,45 @@ class ChatView(APIView):
 
 
 class RecordsListView(APIView):
+    @extend_schema(
+        tags=["Screening"],
+        operation_id="list_records",
+        summary="List screened records",
+        description="Returns all analysis sessions ordered by match score.",
+        parameters=[
+            OpenApiParameter(
+                "order",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                enum=["asc", "desc"],
+                description="Sort direction by match score.",
+                default="asc",
+            ),
+        ],
+        responses={
+            200: inline_serializer(
+                "RecordsListResponse",
+                fields={
+                    "ok": serializers.BooleanField(),
+                    "records": serializers.ListField(
+                        child=inline_serializer(
+                            "RecordSummary",
+                            fields={
+                                "id": serializers.UUIDField(),
+                                "candidateName": serializers.CharField(),
+                                "position": serializers.CharField(),
+                                "score": serializers.IntegerField(),
+                                "status": serializers.CharField(),
+                                "createdAt": serializers.CharField(),
+                                "resumeFilename": serializers.CharField(),
+                                "jdFilename": serializers.CharField(),
+                            },
+                        )
+                    ),
+                },
+            )
+        },
+    )
     def get(self, request: Request) -> Response:
         order = request.query_params.get("order", "asc").lower()
         ascending = order != "desc"
@@ -174,6 +300,34 @@ class RecordsListView(APIView):
 
 
 class RecordDetailView(APIView):
+    @extend_schema(
+        tags=["Screening"],
+        operation_id="retrieve_record",
+        summary="Get a single analysis result",
+        parameters=[
+            OpenApiParameter("session_id", OpenApiTypes.UUID, OpenApiParameter.PATH),
+        ],
+        responses={
+            200: inline_serializer(
+                "RecordDetailResponse",
+                fields={
+                    "ok": serializers.BooleanField(),
+                    "sessionId": serializers.UUIDField(),
+                    "candidateName": serializers.CharField(),
+                    "position": serializers.CharField(),
+                    "chunks": serializers.IntegerField(),
+                    "evaluation": serializers.JSONField(),
+                    "resumeSummary": serializers.CharField(),
+                    "status": serializers.CharField(),
+                    "error": serializers.CharField(),
+                    "createdAt": serializers.CharField(),
+                    "resumeFilename": serializers.CharField(),
+                    "jdFilename": serializers.CharField(),
+                },
+            ),
+            404: _error_response("Record not found."),
+        },
+    )
     def get(self, request: Request, session_id: str) -> Response:
         session = get_session(session_id)
         if session is None:
@@ -184,6 +338,24 @@ class RecordDetailView(APIView):
 
         return Response(_serialize_record_detail(session))
 
+    @extend_schema(
+        tags=["Screening"],
+        operation_id="delete_record",
+        summary="Delete an analysis result",
+        parameters=[
+            OpenApiParameter("session_id", OpenApiTypes.UUID, OpenApiParameter.PATH),
+        ],
+        responses={
+            200: inline_serializer(
+                "DeleteResponse",
+                fields={
+                    "ok": serializers.BooleanField(),
+                    "id": serializers.UUIDField(),
+                },
+            ),
+            404: _error_response("Record not found."),
+        },
+    )
     def delete(self, request: Request, session_id: str) -> Response:
         session = get_session(session_id)
         if session is None:

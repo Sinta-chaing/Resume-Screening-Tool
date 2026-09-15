@@ -1,4 +1,5 @@
 import uuid
+import json
 from unittest.mock import patch
 
 from django.conf import settings
@@ -196,6 +197,42 @@ class RecordsTests(TestCase):
         resp = self.client.delete(reverse("record-detail", args=[self.session.id]))
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(AnalysisSession.objects.filter(pk=self.session.id).exists())
+
+
+class SchemaTests(TestCase):
+    def _schema(self) -> dict:
+        resp = self.client.get(reverse("schema"))
+        self.assertEqual(resp.status_code, 200)
+        return json.loads(resp.content)
+
+    def test_openapi_schema_served(self):
+        data = self._schema()
+        self.assertTrue(data["openapi"].startswith("3."))
+        self.assertEqual(data["info"]["title"], "Resume Screening Tool API")
+        paths = data["paths"]
+        self.assertIn("/api/analyze", paths)
+        self.assertIn("/api/chat", paths)
+        self.assertIn("/api/records", paths)
+
+    def test_analyze_schema_describes_file_upload(self):
+        data = self._schema()
+        media = data["paths"]["/api/analyze"]["post"]["requestBody"]["content"]
+        self.assertIn("multipart/form-data", media)
+        schema = media["multipart/form-data"]["schema"]
+        assert "$ref" in schema
+        component = schema["$ref"].rsplit("/", 1)[-1]
+        props = data["components"]["schemas"][component]["properties"]
+        self.assertEqual(props["resume"]["format"], "binary")
+        self.assertEqual(props["jd"]["format"], "binary")
+
+    def test_swagger_ui_served(self):
+        resp = self.client.get(reverse("swagger-ui"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "swagger-ui")
+
+    def test_redoc_served(self):
+        resp = self.client.get(reverse("redoc"))
+        self.assertEqual(resp.status_code, 200)
 
 
 class VectorStoreTests(TestCase):
