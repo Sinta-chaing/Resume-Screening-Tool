@@ -37,4 +37,4 @@ RUN chmod +x /usr/local/bin/wait-for-db
 EXPOSE 8000
 
 # Run the app with Gunicorn (waits for DB, migrates, then serves)
-CMD ["/bin/sh", "-c", "wait-for-db && python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --timeout 600"]
+CMD ["/bin/sh", "-c", "wait-for-db && python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --timeout 600 --workers 2 --worker-class gthread --threads 4"]
