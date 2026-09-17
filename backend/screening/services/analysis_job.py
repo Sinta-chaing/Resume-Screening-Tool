@@ -7,7 +7,7 @@ from screening.models import AnalysisSession
 from screening.services.ats import evaluate_resume
 from screening.services.chunking import chunk_text
 from screening.services.metadata import extract_record_metadata
-from screening.services.ollama import embed
+from screening.services.ollama import embed_many
 from screening.services.summary import summarize_resume
 from screening.services.vector_store import add_chunk
 
@@ -38,7 +38,7 @@ def _run_analysis(
         session.save(update_fields=["status"])
 
         chunks = chunk_text(resume_text)
-        chunk_embeddings = [embed(chunk) for chunk in chunks]
+        chunk_embeddings = embed_many(chunks) if chunks else []
         evaluation = evaluate_resume(resume_text, jd_text, chunk_embeddings)
         resume_summary = summarize_resume(resume_text)
         metadata = extract_record_metadata(

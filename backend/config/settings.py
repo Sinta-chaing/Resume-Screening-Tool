@@ -118,3 +118,8 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 # (VectorField) in screening/models.py (currently 1024 -> mxbai-embed-large).
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "mxbai-embed-large")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "llama3.2")
+# How long to keep a model loaded in Ollama's memory after its last use.
+# "0" unloads immediately (slowest, lowest RAM), "5m" reuses the warm model
+# across a job's sequential calls (fast, higher RAM). Accepted by Ollama as
+# a duration like "5m"/"1h" or an epoch integer; "0" disables persistence.
+OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "5m")

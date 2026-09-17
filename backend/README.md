@@ -142,8 +142,14 @@ returns `202 Accepted` right away.
 
 - Jobs run **one at a time** (serialized) so a small server never loads two
   LLM models at once.
-- `OLLAMA_*` calls pass `keep_alive: 0`, so models unload after every call,
-  keeping the container's RAM footprint low.
+- `OLLAMA_KEEP_ALIVE` (default `5m`) keeps models warm in Ollama's memory
+  between calls of a job instead of reloading them per call; set to `0` for
+  the smallest RAM footprint (slowest), or `1m`/`3m`/`5m` to trade RAM for
+  speed.
+- Embeddings are sent **batched**: all resume chunks and all requirement
+  snippets are embedded in one `/api/embed` call each instead of dozens.
+- Stale sessions (`pending`/`processing` for >30 min, e.g. orphaned by a
+  restart) are marked `failed` on startup via `manage.py recover_stale`.
 - Sessions start `pending`; status transitions `pending → processing → completed/failed`.
 
 ## Reference

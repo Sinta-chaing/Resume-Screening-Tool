@@ -3,7 +3,7 @@ import re
 from functools import lru_cache
 
 from .chunking import chunk_text
-from .ollama import embed
+from .ollama import embed, embed_many
 
 SKILL_WEIGHT = 0.7
 EMBED_WEIGHT = 0.3
@@ -225,33 +225,12 @@ def _cached_embed(text: str) -> tuple[float, ...]:
     return tuple(embed(text))
 
 
-def _best_semantic_similarity(
-    requirement: str,
-    resume_embeddings: list[list[float] | tuple[float, ...]],
-) -> float:
-    if not resume_embeddings:
-        return 0.0
-
-    requirement_embedding = _cached_embed(requirement[:EMBED_TEXT_LIMIT])
-    return max(_cosine_similarity(requirement_embedding, chunk_embedding) for chunk_embedding in resume_embeddings)
-
-
-def _requirement_matches(
-    requirement: str,
-    resume_lookup: str,
-    resume_embeddings: list[list[float] | tuple[float, ...]],
-) -> tuple[bool, str]:
-    if _phrase_in_text(requirement, resume_lookup):
-        return True, "text"
-
-    if _alias_match(requirement, resume_lookup):
-        return True, "alias"
-
-    semantic_score = _best_semantic_similarity(requirement, resume_embeddings)
-    if semantic_score >= SEMANTIC_MATCH_THRESHOLD:
-        return True, "semantic"
-
-    return False, "none"
+@lru_cache(maxsize=128)
+def _cached_embed_many(texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+    if not texts:
+        return ()
+    embeddings = embed_many(list(texts))
+    return tuple(tuple(item) for item in embeddings)
 
 
 def _build_resume_embeddings(
@@ -283,12 +262,32 @@ def requirement_match_score(
             "semanticThreshold": SEMANTIC_MATCH_THRESHOLD,
         }
 
+    text_matched: dict[str, bool] = {}
+    semantic_candidates: list[str] = []
+    for requirement in requirements:
+        if _phrase_in_text(requirement, resume_lookup) or _alias_match(requirement, resume_lookup):
+            text_matched[requirement] = True
+        else:
+            semantic_candidates.append(requirement)
+
+    # Embed every requirement that needs the semantic fallback in ONE batched
+    # Ollama call, then score them against the resume chunk embeddings.
+    semantic_scores: dict[str, float] = {}
+    if semantic_candidates and chunk_embeddings:
+        snippets = tuple(req[:EMBED_TEXT_LIMIT] for req in semantic_candidates)
+        embeddings = _cached_embed_many(snippets)
+        for requirement, requirement_embedding in zip(semantic_candidates, embeddings):
+            semantic_scores[requirement] = max(
+                _cosine_similarity(requirement_embedding, chunk_embedding)
+                for chunk_embedding in chunk_embeddings
+            )
+
     matched: list[str] = []
     missing: list[str] = []
-
     for requirement in requirements:
-        is_match, _method = _requirement_matches(requirement, resume_lookup, chunk_embeddings)
-        if is_match:
+        if text_matched.get(requirement):
+            matched.append(requirement)
+        elif semantic_scores.get(requirement, 0.0) >= SEMANTIC_MATCH_THRESHOLD:
             matched.append(requirement)
         else:
             missing.append(requirement)

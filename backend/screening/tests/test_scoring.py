@@ -60,12 +60,12 @@ class RequirementMatchTests(SimpleTestCase):
         self.assertIn("Python", result["matchedSkills"])
         self.assertIn("React", result["matchedSkills"])
 
-    @patch("screening.services.scoring.embed")
-    def test_phrase_match_skips_embedding_calls(self, mock_embed):
+    @patch("screening.services.scoring.embed_many")
+    def test_phrase_match_skips_embedding_calls(self, mock_embed_many):
         resume = "Python engineer"
         jd = "Requirements:\n- Python"
         requirement_match_score(resume, jd, resume_embeddings=[[0.5]])
-        mock_embed.assert_not_called()
+        mock_embed_many.assert_not_called()
 
     @patch("screening.services.scoring.embed", return_value=[1.0, 0.0])
     def test_alias_match_counts(self, mock_embed):
@@ -75,13 +75,29 @@ class RequirementMatchTests(SimpleTestCase):
         self.assertEqual(result["score"], 100.0)
         self.assertIn("aws", result["matchedSkills"])
 
-    @patch("screening.services.scoring.embed", return_value=[0.0, 1.0])
-    def test_missing_skill_is_unmatched(self, mock_embed):
+    @patch("screening.services.scoring.embed_many")
+    def test_missing_skill_is_unmatched(self, mock_embed_many):
         resume = "Python backend developer."
         jd = "Requirements:\n- Python\n- Kubernetes"
+        mock_embed_many.return_value = [[0.0, 1.0]]
         result = requirement_match_score(resume, jd, resume_embeddings=[[1.0, 0.0]])
         self.assertEqual(result["score"], 50.0)
         self.assertIn("Python", result["matchedSkills"])
+        self.assertIn("Kubernetes", result["missingSkills"])
+        mock_embed_many.assert_called_once()
+
+    @patch("screening.services.scoring.embed_many")
+    def test_semantic_matches_are_batched_in_one_call(self, mock_embed_many):
+        resume = "Architected systems at scale."
+        jd = "Requirements:\n- Systems design and architecture\n- Kubernetes\n- Terraform"
+        # All three requirements need the semantic fallback; embeddings are
+        # requested in ONE batched call, aligned by order.
+        mock_embed_many.return_value = [[1.0, 0.0], [0.0, 1.0], [0.0, 1.0]]
+        result = requirement_match_score(resume, jd, resume_embeddings=[[1.0, 0.0]])
+        self.assertEqual(mock_embed_many.call_count, 1)
+        sent = mock_embed_many.call_args.args[0]
+        self.assertEqual(len(sent), 3)
+        self.assertIn("Systems design and architecture", result["matchedSkills"])
         self.assertIn("Kubernetes", result["missingSkills"])
 
     @patch("screening.services.scoring.embed")

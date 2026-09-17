@@ -83,7 +83,7 @@ class AnalysisJobTests(TestCase):
             "suggestions": [],
         },
     )
-    @patch("screening.services.analysis_job.embed", return_value=EMB)
+    @patch("screening.services.analysis_job.embed_many", return_value=[EMB])
     @patch("screening.services.analysis_job.chunk_text", return_value=["Python developer"])
     def test_analysis_job_completes_session(self, *mocks):
         session = AnalysisSession.objects.create(resume_filename="r.pdf", jd_filename="j.txt")
@@ -101,8 +101,8 @@ class AnalysisJobTests(TestCase):
         self.assertEqual(len(chunks.first().embedding), 1024)
         self.assertEqual(session.evaluation["score"], 80)
 
-    @patch("screening.services.analysis_job.embed", side_effect=RuntimeError("ollama down"))
-    def test_analysis_job_marks_failed_on_error(self, mock_embed):
+    @patch("screening.services.analysis_job.embed_many", side_effect=RuntimeError("ollama down"))
+    def test_analysis_job_marks_failed_on_error(self, mock_embed_many):
         session = AnalysisSession.objects.create(resume_filename="r.pdf", jd_filename="j.txt")
 
         from screening.services.analysis_job import _run_analysis
