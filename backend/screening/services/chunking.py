@@ -1,11 +1,12 @@
 MAX_CHUNKS = 500
 
 
-def chunk_text(text: str, max_chars: int = 800) -> list[str]:
+def chunk_text(text: str, max_chars: int = 1600) -> list[str]:
     """Split text into chunks of approximately max_chars characters.
 
-    ~800 chars keeps each chunk well inside the embedding model's 512-token
-    context window (mxbai-embed-large) so no information is truncated away.
+    ~1600 chars keeps each chunk inside the embedding model's 512-token
+    context window (mxbai-embed-large) while roughly halving the number of
+    embedding calls on CPU-only servers.
     """
     if not text or not text.strip():
         return []

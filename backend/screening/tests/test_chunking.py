@@ -34,4 +34,4 @@ class ChunkTextTests(SimpleTestCase):
 
     def test_too_large_document_raises(self):
         with self.assertRaises(ValueError):
-            chunk_text("a" * (MAX_CHUNKS * 800 + 1))
+            chunk_text("a" * (MAX_CHUNKS * 1600 + 1))

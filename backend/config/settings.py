@@ -117,7 +117,7 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 # NOTE: the embedding model's output dimension MUST match ResumeChunk.embedding
 # (VectorField) in screening/models.py (currently 1024 -> mxbai-embed-large).
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "mxbai-embed-large")
-CHAT_MODEL = os.environ.get("CHAT_MODEL", "llama3.2:1b")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen2.5:0.5b")
 # How long to keep a model loaded in Ollama's memory after its last use.
 # "0" unloads immediately (lowest RAM, reload cost per call). The 3.7GB box
 # cannot hold both models resident at once (2.2GB + Postgres = swap), so we
