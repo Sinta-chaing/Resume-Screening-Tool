@@ -187,6 +187,8 @@ class RecordsTests(TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["sessionId"], str(self.session.id))
         self.assertEqual(data["candidateName"], "Alex Chen")
+        self.assertIn("phase", data)
+        self.assertIn("heartbeatAt", data)
 
     def test_record_detail_404(self):
         resp = self.client.get(reverse("record-detail", args=[uuid.uuid4()]))

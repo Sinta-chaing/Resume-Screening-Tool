@@ -26,6 +26,10 @@ class AnalysisSession(models.Model):
         default=Status.PENDING,
     )
     error_message = models.TextField(blank=True, default="")
+    # Progress observability: which pipeline stage is running and when it last
+    # moved. Lets a client (or operator) see a job is alive and where it is.
+    phase = models.CharField(max_length=64, blank=True, default="")
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

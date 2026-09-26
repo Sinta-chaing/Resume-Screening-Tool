@@ -1,7 +1,9 @@
 import logging
 import threading
+import time
 
 from django.db import close_old_connections
+from django.utils import timezone
 
 from screening.models import AnalysisSession
 from screening.services.ats import evaluate_resume
@@ -17,6 +19,13 @@ logger = logging.getLogger(__name__)
 # doesn't run out of RAM running multiple Ollama models in parallel.
 _analysis_workers: set[threading.Thread] = set()
 _analysis_lock = threading.Lock()
+
+
+def _set_phase(session: AnalysisSession, phase: str) -> None:
+    """Persist the current stage + a heartbeat so progress is observable."""
+    session.phase = phase
+    session.heartbeat_at = timezone.now()
+    session.save(update_fields=["phase", "heartbeat_at", "status"])
 
 
 def _run_analysis(
@@ -36,17 +45,31 @@ def _run_analysis(
         session = AnalysisSession.objects.get(pk=session_id)
         session.status = AnalysisSession.Status.PROCESSING
         session.save(update_fields=["status"])
+        job_started = time.monotonic()
 
+        def checkpoint(phase: str) -> None:
+            _set_phase(session, phase)
+            logger.info(
+                "session %s phase=%s elapsed=%.1fs",
+                session_id, phase, time.monotonic() - job_started,
+            )
+
+        checkpoint("extracting")
         chunks = chunk_text(resume_text)
+        checkpoint("embedding")
         chunk_embeddings = embed_many(chunks) if chunks else []
+        checkpoint("scoring")
         evaluation = evaluate_resume(resume_text, jd_text, chunk_embeddings)
+        checkpoint("llm-report")
         resume_summary = summarize_resume(resume_text)
+        checkpoint("llm-metadata")
         metadata = extract_record_metadata(
             resume_text,
             jd_text,
             resume_filename,
             jd_filename,
         )
+        checkpoint("storing")
 
         for i, chunk in enumerate(chunks):
             add_chunk(session, f"resume-{i}", chunk, chunk_embeddings[i])
@@ -58,14 +81,23 @@ def _run_analysis(
         session.position = metadata["position"]
         session.status = AnalysisSession.Status.COMPLETED
         session.error_message = ""
+        session.phase = "done"
+        session.heartbeat_at = timezone.now()
         session.save()
+        logger.info(
+            "session %s COMPLETED in %.1fs score=%s",
+            session_id, time.monotonic() - job_started,
+            evaluation.get("score"),
+        )
     except Exception as exc:  # noqa: BLE001 - persist any failure
         logger.exception("Analysis failed for session %s", session_id)
         try:
             session = AnalysisSession.objects.get(pk=session_id)
             session.status = AnalysisSession.Status.FAILED
             session.error_message = str(exc)[:2000]
-            session.save(update_fields=["status", "error_message"])
+            session.phase = "failed"
+            session.heartbeat_at = timezone.now()
+            session.save(update_fields=["status", "error_message", "phase", "heartbeat_at"])
         except AnalysisSession.DoesNotExist:
             logger.warning("Analysis session %s deleted; skipping failure update", session_id)
 

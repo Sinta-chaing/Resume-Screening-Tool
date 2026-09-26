@@ -48,6 +48,8 @@ def _serialize_record_detail(session: AnalysisSession) -> dict:
         "resumeSummary": session.resume_summary,
         "status": session.status,
         "error": session.error_message,
+        "phase": session.phase,
+        "heartbeatAt": session.heartbeat_at.isoformat() if session.heartbeat_at else None,
         "createdAt": session.created_at.isoformat(),
         "resumeFilename": session.resume_filename,
         "jdFilename": session.jd_filename,
