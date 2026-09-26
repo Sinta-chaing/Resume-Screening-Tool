@@ -54,7 +54,7 @@ def chat(messages: list[dict]) -> str:
         "model": settings.CHAT_MODEL,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0},
+        "options": {"temperature": 0, "num_predict": 1024},
         "keep_alive": settings.OLLAMA_KEEP_ALIVE,
     }
     response = requests.post(url, json=payload, timeout=900)

@@ -142,10 +142,11 @@ returns `202 Accepted` right away.
 
 - Jobs run **one at a time** (serialized) so a small server never loads two
   LLM models at once.
-- `OLLAMA_KEEP_ALIVE` (default `5m`) keeps models warm in Ollama's memory
-  between calls of a job instead of reloading them per call; set to `0` for
-  the smallest RAM footprint (slowest), or `1m`/`3m`/`5m` to trade RAM for
-  speed.
+- `OLLAMA_KEEP_ALIVE` (default `0`): keeps models loaded in Ollama's memory
+  between calls. `0` unloads after every call — the safe default for the
+  3.7GB RAM server, since holding both models resident causes swapping.
+  Batching (below) already provides the bulk of the speedup without the RAM
+  cost.
 - Embeddings are sent **batched**: all resume chunks and all requirement
   snippets are embedded in one `/api/embed` call each instead of dozens.
 - Stale sessions (`pending`/`processing` for >30 min, e.g. orphaned by a

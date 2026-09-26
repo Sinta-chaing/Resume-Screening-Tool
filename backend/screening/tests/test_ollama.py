@@ -98,6 +98,7 @@ class ChatTests(SimpleTestCase):
 
         request_payload = mock_post.call_args.kwargs["json"]
         self.assertEqual(request_payload["keep_alive"], ollama.settings.OLLAMA_KEEP_ALIVE)
+        self.assertEqual(request_payload["options"]["num_predict"], 1024)
 
     @patch("requests.post")
     def test_chat_raises_on_http_error(self, mock_post):
