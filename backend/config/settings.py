@@ -119,9 +119,20 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "mxbai-embed-large")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "llama3.2:1b")
 # How long to keep a model loaded in Ollama's memory after its last use.
-# "0" unloads immediately (lowest RAM, small reload cost per call) and is the
-# safe default for the 3.7GB RAM server: keeping both the 1b chat + 684MB
-# embed model resident simultaneously swaps the box to a crawl. Raise to
-# "1m"/"5m" only if the server has headroom. Accepted by Ollama as a duration
-# like "5m"/"1h" or an epoch integer; "0" disables persistence.
-OLLAMA_KEEP_ALIVE = os.environ.get("OLLAMA_KEEP_ALIVE", "0")
+# "0" unloads immediately (lowest RAM, reload cost per call). The 3.7GB box
+# cannot hold both models resident at once (2.2GB + Postgres = swap), so we
+# keep EACH model only long enough to cover its phase of the job:
+#   - embed model: 60s  -> covers chunk + semantic + similarity embeds, then
+#                          evicts before the chat model loads (no overlap)
+#   - chat model: 5m    -> covers the 3 sequential report calls without
+#                          reloading; evicts after the job finishes
+# Accepted by Ollama as a duration like "5m"/"1h" or an epoch integer;
+# "0" disables persistence. Set OLLAMA_KEEP_ALIVE to override both.
+OLLAMA_EMBED_KEEP_ALIVE = os.environ.get(
+    "OLLAMA_EMBED_KEEP_ALIVE",
+    os.environ.get("OLLAMA_KEEP_ALIVE", "60s"),
+)
+OLLAMA_CHAT_KEEP_ALIVE = os.environ.get(
+    "OLLAMA_CHAT_KEEP_ALIVE",
+    os.environ.get("OLLAMA_KEEP_ALIVE", "5m"),
+)

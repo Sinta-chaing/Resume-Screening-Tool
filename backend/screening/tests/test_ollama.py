@@ -26,7 +26,7 @@ class EmbedTests(SimpleTestCase):
         self.assertEqual(request_payload["model"], ollama.settings.EMBEDDING_MODEL)
         self.assertEqual(request_payload["input"], ["some resume text"])
         self.assertTrue(request_payload["truncate"])
-        self.assertEqual(request_payload["keep_alive"], ollama.settings.OLLAMA_KEEP_ALIVE)
+        self.assertEqual(request_payload["keep_alive"], ollama.settings.OLLAMA_EMBED_KEEP_ALIVE)
 
     @patch("requests.post")
     def test_embed_raises_on_http_error(self, mock_post):
@@ -50,7 +50,7 @@ class EmbedManyTests(SimpleTestCase):
 
         request_payload = mock_post.call_args.kwargs["json"]
         self.assertEqual(request_payload["input"], ["first chunk", "second chunk"])
-        self.assertEqual(request_payload["keep_alive"], ollama.settings.OLLAMA_KEEP_ALIVE)
+        self.assertEqual(request_payload["keep_alive"], ollama.settings.OLLAMA_EMBED_KEEP_ALIVE)
 
     @patch("requests.post")
     def test_embed_many_raises_on_http_error(self, mock_post):
@@ -97,7 +97,7 @@ class ChatTests(SimpleTestCase):
         self.assertEqual(ollama.chat(messages), "hello there")
 
         request_payload = mock_post.call_args.kwargs["json"]
-        self.assertEqual(request_payload["keep_alive"], ollama.settings.OLLAMA_KEEP_ALIVE)
+        self.assertEqual(request_payload["keep_alive"], ollama.settings.OLLAMA_CHAT_KEEP_ALIVE)
         self.assertEqual(request_payload["options"]["num_predict"], 1024)
 
     @patch("requests.post")

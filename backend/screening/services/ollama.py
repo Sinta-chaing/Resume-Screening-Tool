@@ -35,7 +35,7 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
         "model": settings.EMBEDDING_MODEL,
         "input": texts,
         "truncate": True,
-        "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+        "keep_alive": settings.OLLAMA_EMBED_KEEP_ALIVE,
     }
     response = requests.post(url, json=payload, timeout=300)
     if not response.ok:
@@ -55,7 +55,7 @@ def chat(messages: list[dict]) -> str:
         "prompt": prompt,
         "stream": False,
         "options": {"temperature": 0, "num_predict": 1024},
-        "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+        "keep_alive": settings.OLLAMA_CHAT_KEEP_ALIVE,
     }
     response = requests.post(url, json=payload, timeout=900)
     if not response.ok:

@@ -1,0 +1,371 @@
+openapi: 3.0.3
+info:
+  title: Resume Screening Tool API
+  version: 1.0.0
+  description: Upload a candidate's resume (PDF) and a job description. The service
+    extracts text, embeds it with Ollama, scores the match against the role, and lets
+    you ask RAG questions about the candidate. Analysis runs asynchronously - poll
+    the record endpoint until the status is 'completed'.
+paths:
+  /api/analyze:
+    post:
+      operationId: analyze_create
+      description: Upload the candidate's resume (PDF) and a job description (PDF
+        or text). Analysis starts in the background; returns immediately with a sessionId.
+        Poll GET /api/records/{sessionId} until status is 'completed'.
+      summary: Analyze a resume against a job description
+      tags:
+      - Screening
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeResponse'
+          description: ''
+        '400':
+          description: Both resume and jd files are required, or a file has no readable
+            text.
+        '500':
+          description: Internal error while extracting text or queuing the job.
+  /api/chat:
+    post:
+      operationId: chat_create
+      description: Requires a completed analysis session. The answer is grounded in
+        the resume's embedded chunks.
+      summary: Ask a RAG question about an analyzed resume
+      tags:
+      - Screening
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChatRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+          description: ''
+        '400':
+          description: Missing question/sessionId, or unknown sessionId.
+        '500':
+          description: Internal error while answering.
+  /api/health:
+    get:
+      operationId: health_retrieve
+      description: Returns service status and the Ollama models in use.
+      summary: Service health
+      tags:
+      - Health
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+          description: ''
+  /api/records:
+    get:
+      operationId: list_records
+      description: Returns all analysis sessions ordered by match score.
+      summary: List screened records
+      parameters:
+      - in: query
+        name: order
+        schema:
+          type: string
+          enum:
+          - asc
+          - desc
+          default: asc
+        description: Sort direction by match score.
+      tags:
+      - Screening
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordsListResponse'
+          description: ''
+  /api/records/{session_id}:
+    get:
+      operationId: retrieve_record
+      summary: Get a single analysis result
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Screening
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordDetailResponse'
+          description: ''
+        '404':
+          description: Record not found.
+    delete:
+      operationId: delete_record
+      summary: Delete an analysis result
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Screening
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+          description: ''
+        '404':
+          description: Record not found.
+components:
+  schemas:
+    AnalyzeRequestRequest:
+      type: object
+      properties:
+        resume:
+          type: string
+          format: binary
+          writeOnly: true
+        jd:
+          type: string
+          format: binary
+          writeOnly: true
+      required:
+      - jd
+      - resume
+    AnalyzeResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        sessionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+      required:
+      - ok
+      - sessionId
+      - status
+    ChatRequestRequest:
+      type: object
+      properties:
+        question:
+          type: string
+          minLength: 1
+        sessionId:
+          type: string
+          format: uuid
+      required:
+      - question
+      - sessionId
+    ChatResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/Source'
+      required:
+      - answer
+      - ok
+      - sources
+    DeleteResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+      required:
+      - id
+      - ok
+    HealthResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        useOllama:
+          type: string
+        ollamaBaseUrl:
+          type: string
+        embeddingModel:
+          type: string
+        chatModel:
+          type: string
+      required:
+      - chatModel
+      - embeddingModel
+      - ok
+      - ollamaBaseUrl
+      - useOllama
+    RecordDetailResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        sessionId:
+          type: string
+          format: uuid
+        candidateName:
+          type: string
+        position:
+          type: string
+        chunks:
+          type: integer
+        evaluation: {}
+        resumeSummary:
+          type: string
+        status:
+          type: string
+        error:
+          type: string
+        createdAt:
+          type: string
+        resumeFilename:
+          type: string
+        jdFilename:
+          type: string
+      required:
+      - candidateName
+      - chunks
+      - createdAt
+      - error
+      - evaluation
+      - jdFilename
+      - ok
+      - position
+      - resumeFilename
+      - resumeSummary
+      - sessionId
+      - status
+    RecordSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        candidateName:
+          type: string
+        position:
+          type: string
+        score:
+          type: integer
+        status:
+          type: string
+        createdAt:
+          type: string
+        resumeFilename:
+          type: string
+        jdFilename:
+          type: string
+      required:
+      - candidateName
+      - createdAt
+      - id
+      - jdFilename
+      - position
+      - resumeFilename
+      - score
+      - status
+    RecordsListResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecordSummary'
+      required:
+      - ok
+      - records
+    Source:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        chunkKey:
+          type: string
+        chunkIndex:
+          type: integer
+        text:
+          type: string
+      required:
+      - chunkIndex
+      - chunkKey
+      - sessionId
+      - text
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

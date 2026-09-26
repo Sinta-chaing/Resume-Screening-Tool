@@ -142,11 +142,13 @@ returns `202 Accepted` right away.
 
 - Jobs run **one at a time** (serialized) so a small server never loads two
   LLM models at once.
-- `OLLAMA_KEEP_ALIVE` (default `0`): keeps models loaded in Ollama's memory
-  between calls. `0` unloads after every call — the safe default for the
-  3.7GB RAM server, since holding both models resident causes swapping.
-  Batching (below) already provides the bulk of the speedup without the RAM
-  cost.
+- `OLLAMA_EMBED_KEEP_ALIVE` (default `60s`) and `OLLAMA_CHAT_KEEP_ALIVE`
+  (default `5m`) control how long each model stays loaded in Ollama's RAM.
+  The 3.7GB server can't hold both models resident at once, so each is kept
+  loaded only long enough to cover its phase of a job (embed model evicts
+  before the chat model loads; chat model covers the 3 report calls then
+  evicts). Set `OLLAMA_KEEP_ALIVE` to override both, or `0` to unload after
+  every call.
 - Embeddings are sent **batched**: all resume chunks and all requirement
   snippets are embedded in one `/api/embed` call each instead of dozens.
 - Stale sessions (`pending`/`processing` for >30 min, e.g. orphaned by a
