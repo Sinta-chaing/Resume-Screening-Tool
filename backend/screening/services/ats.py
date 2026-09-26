@@ -7,6 +7,20 @@ from .scoring import compute_hybrid_score
 NARRATIVE_TEXT_LIMIT = 4500
 
 
+def _fallback_summary(resume_text: str) -> str:
+    """Deterministic summary used when the LLM JSON cannot be parsed."""
+    cleaned = " ".join(resume_text.split()).strip()
+    if not cleaned:
+        return ""
+    sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+    summary = ""
+    for sentence in sentences[:4]:
+        if summary and len(summary) + len(sentence) + 1 > 320:
+            break
+        summary = f"{summary} {sentence}".strip()
+    return summary or cleaned[:320]
+
+
 def safe_json_from_text(text: str) -> dict | None:
     if not text:
         return None
@@ -176,6 +190,7 @@ Return ONLY valid JSON with exactly these keys:
 - strengths: array of 3-6 strings describing top matching strengths
 - gaps: array of 3-6 strings describing missing skills or weak areas
 - suggestions: array of exactly 3 improvement suggestions
+- summary: a 2-4 sentence concise professional summary of the candidate
 
 Rules:
 - Use plain strings in each array
@@ -192,12 +207,19 @@ Rules:
     narrative = normalize_narrative(parsed, evaluation_raw)
     merged = _merge_narrative(narrative, fallback)
 
+    summary = ""
+    if parsed:
+        summary = str(parsed.get("summary", "")).strip()
+    if not summary:
+        summary = _fallback_summary(resume_text)
+
     result = {
         "score": hybrid["score"],
         "scoreBreakdown": breakdown,
         "strengths": merged["strengths"],
         "gaps": merged["gaps"],
         "suggestions": merged["suggestions"],
+        "resumeSummary": summary,
     }
 
     if narrative.get("narrativeRaw") and not narrative["strengths"] and not narrative["gaps"]:

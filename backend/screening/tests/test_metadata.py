@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from django.test import SimpleTestCase
 
 from screening.services.metadata import _name_from_filename, extract_record_metadata
@@ -23,29 +21,29 @@ class NameFromFilenameTests(SimpleTestCase):
 
 
 class ExtractMetadataTests(SimpleTestCase):
-    @patch("screening.services.metadata.chat", return_value='{"position": "Backend Engineer"}')
-    def test_uses_filename_for_name_and_llm_for_position(self, mock_chat):
+    def test_uses_filename_for_name_and_first_jd_line_for_position(self):
         metadata = extract_record_metadata(
-            "resume text", "job description text", "Alex_Chen.pdf", "jd.txt"
+            "resume text",
+            "Backend Engineer\n(2nd line)",
+            "Alex_Chen.pdf",
+            "jd.txt",
         )
         self.assertEqual(metadata["candidate_name"], "Alex Chen")
         self.assertEqual(metadata["position"], "Backend Engineer")
 
-    @patch("screening.services.metadata.chat", return_value="not json at all")
-    def test_position_fallback_uses_first_jd_line(self, mock_chat):
+    def test_position_skips_empty_first_lines(self):
         metadata = extract_record_metadata(
             "resume text",
-            "Data Scientist with Python\n(2nd line)",
+            "\n\nData Scientist with Python\n(2nd line)",
             "CV_Maria Doe.pdf",
             "jd.txt",
         )
         self.assertEqual(metadata["candidate_name"], "Maria Doe")
         self.assertEqual(metadata["position"], "Data Scientist with Python")
 
-    @patch("screening.services.metadata.chat", side_effect=RuntimeError("llm down"))
-    def test_llm_failure_falls_back_gracefully(self, mock_chat):
+    def test_position_falls_back_to_filename(self):
         metadata = extract_record_metadata(
-            "resume text", "DevOps Engineer\nSome more", "Omar_P.md", "jd.txt"
+            "resume text", "", "Omar_P.md", "DevOps_Engineer_job.md"
         )
         self.assertEqual(metadata["candidate_name"], "Omar P")
-        self.assertEqual(metadata["position"], "DevOps Engineer")
+        self.assertEqual(metadata["position"], "DevOps Engineer job")

@@ -1,9 +1,6 @@
 import os
 import re
 
-from .ats import safe_json_from_text
-from .ollama import chat
-
 
 def _name_from_filename(filename: str) -> str:
     base = os.path.splitext(filename)[0]
@@ -32,33 +29,8 @@ def extract_record_metadata(
     # resume text guess, which can return the wrong person's name.
     candidate_name = _name_from_filename(resume_filename)
 
-    prompt = f"""
-Extract the job title or role described in the job description below.
-
-Return ONLY valid JSON with key:
-- position: the job title or role from the job description
-
-JOB DESCRIPTION (excerpt):
-{jd_text[:1500]}
-
-Rules:
-- no markdown, no extra text
-- use a plain string for position
-"""
-
-    position = None
-    try:
-        raw = chat([
-            {"role": "system", "content": "You extract structured hiring metadata."},
-            {"role": "user", "content": prompt},
-        ])
-        parsed = safe_json_from_text(raw)
-        if parsed:
-            position = str(parsed.get("position", "")).strip()
-    except Exception:
-        pass
-
-    if not position:
-        position = _position_from_jd(jd_text, jd_filename)
+    # Position is derived deterministically from the first short JD line to
+    # avoid a second LLM round-trip on CPU-only servers.
+    position = _position_from_jd(jd_text, jd_filename)
 
     return {"candidate_name": candidate_name, "position": position}

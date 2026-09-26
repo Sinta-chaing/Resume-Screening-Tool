@@ -8,7 +8,7 @@ AI-powered resume analysis against job descriptions using **Retrieval-Augmented 
 |-------|------------|
 | Frontend | Next.js 15, TypeScript, React, App Router |
 | Backend | Django 5, Django REST Framework, Python |
-| AI | Ollama (`mxbai-embed-large`, `llama3.2`) |
+| AI | Ollama (`mxbai-embed-large`, `qwen2.5:0.5b`) |
 
 ## Project Structure
 
@@ -37,7 +37,7 @@ Resume-Screening-Tool/
 - Ollama running locally with models pulled:
   ```powershell
   ollama pull mxbai-embed-large
-  ollama pull llama3.2
+  ollama pull qwen2.5:0.5b
   ```
 
 ## Backend Setup
@@ -81,7 +81,7 @@ Frontend: http://localhost:3000
 | `USE_OLLAMA` | `true` | Flag exposed in health endpoint |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API base URL |
 | `EMBEDDING_MODEL` | `mxbai-embed-large` | Embedding model name (1024-dim) |
-| `CHAT_MODEL` | `llama3.2` | Chat/generation model name |
+| `CHAT_MODEL` | `qwen2.5:0.5b` | Chat/generation model name |
 
 ### Frontend (`frontend/.env.local`)
 
@@ -99,7 +99,7 @@ Frontend: http://localhost:3000
   "useOllama": "true",
   "ollamaBaseUrl": "http://localhost:11434",
   "embeddingModel": "mxbai-embed-large",
-  "chatModel": "llama3.2"
+  "chatModel": "qwen2.5:0.5b"
 }
 ```
 

@@ -10,7 +10,6 @@ from screening.services.ats import evaluate_resume
 from screening.services.chunking import chunk_text
 from screening.services.metadata import extract_record_metadata
 from screening.services.ollama import embed_many
-from screening.services.summary import summarize_resume
 from screening.services.vector_store import add_chunk
 
 logger = logging.getLogger(__name__)
@@ -61,7 +60,7 @@ def _run_analysis(
         checkpoint("scoring")
         evaluation = evaluate_resume(resume_text, jd_text, chunk_embeddings)
         checkpoint("llm-report")
-        resume_summary = summarize_resume(resume_text)
+        resume_summary = evaluation.get("resumeSummary", "")
         checkpoint("llm-metadata")
         metadata = extract_record_metadata(
             resume_text,

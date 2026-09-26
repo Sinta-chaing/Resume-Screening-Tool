@@ -68,7 +68,6 @@ class AnalysisJobTests(TestCase):
         "screening.services.analysis_job.extract_record_metadata",
         return_value={"candidate_name": "Alex Chen", "position": "AI Engineer"},
     )
-    @patch("screening.services.analysis_job.summarize_resume", return_value="A solid Python candidate.")
     @patch(
         "screening.services.analysis_job.evaluate_resume",
         return_value={
@@ -81,6 +80,7 @@ class AnalysisJobTests(TestCase):
             "strengths": ["Strong Python"],
             "gaps": [],
             "suggestions": [],
+            "resumeSummary": "A solid Python candidate.",
         },
     )
     @patch("screening.services.analysis_job.embed_many", return_value=[EMB])
@@ -100,6 +100,7 @@ class AnalysisJobTests(TestCase):
         self.assertEqual(chunks.count(), 1)
         self.assertEqual(len(chunks.first().embedding), 1024)
         self.assertEqual(session.evaluation["score"], 80)
+        self.assertEqual(session.resume_summary, "A solid Python candidate.")
 
     @patch("screening.services.analysis_job.embed_many", side_effect=RuntimeError("ollama down"))
     def test_analysis_job_marks_failed_on_error(self, mock_embed_many):
