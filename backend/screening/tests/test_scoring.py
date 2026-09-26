@@ -3,7 +3,6 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from screening.services.scoring import (
-    EMBED_TEXT_LIMIT,
     _cached_embed,
     _cosine_similarity,
     compute_hybrid_score,
@@ -27,25 +26,42 @@ class CosineSimilarityTests(SimpleTestCase):
 
 
 class EmbeddingSimilarityTests(SimpleTestCase):
-    def setUp(self):
-        _cached_embed.cache_clear()
-
-    @patch("screening.services.scoring.embed", return_value=[1.0, 0.0, 0.0])
-    def test_identical_embeddings_give_100(self, mock_embed):
-        score = embedding_similarity_score("resume alpha", "jd alpha")
+    def test_identical_vectors_give_100(self):
+        score = embedding_similarity_score([1.0, 0.0, 0.0], [1.0, 0.0, 0.0])
         self.assertEqual(score, 100.0)
-        self.assertEqual(mock_embed.call_count, 2)
 
-    @patch("screening.services.scoring.embed", side_effect=[[1.0, 0.0], [0.0, 1.0]])
-    def test_orthogonal_embeddings_give_zero(self, mock_embed):
-        score = embedding_similarity_score("resume beta", "jd gamma")
+    def test_orthogonal_vectors_give_zero(self):
+        score = embedding_similarity_score([1.0, 0.0], [0.0, 1.0])
         self.assertEqual(score, 0.0)
 
-    @patch("screening.services.scoring.embed", return_value=[1.0, 1.0])
-    def test_inputs_are_truncated_to_embed_limit(self, mock_embed):
-        embedding_similarity_score("r" * 5000, "j" * 5000)
-        for call in mock_embed.call_args_list:
-            self.assertLessEqual(len(call.args[0]), EMBED_TEXT_LIMIT)
+    def test_opposite_vectors_clamp_to_zero(self):
+        score = embedding_similarity_score([1.0, 0.0], [-1.0, 0.0])
+        self.assertEqual(score, 0.0)
+
+    @patch("screening.services.scoring._cached_embed")
+    def test_compute_hybrid_reuses_vectors_without_extra_embeds(self, mock_embed):
+        resume = "Built production ML pipelines with PyTorch and Spark."
+        jd = "Requirements:\n- MLOps infrastructure\n- Large-scale batch\n- Feature store"
+        # 3 semantic candidates -> 1 batched call; no per-text similarity embeds.
+        with patch(
+            "screening.services.scoring._cached_embed_many",
+            return_value=((1.0, 0.0), (1.0, 0.0), (1.0, 0.0)),
+        ) as mock_many:
+            result = compute_hybrid_score(resume, jd, resume_embeddings=[[1.0, 0.0]])
+        mock_many.assert_called_once()
+        mock_embed.assert_not_called()
+        self.assertEqual(result["scoreBreakdown"]["embeddingSimilarity"], 100)
+
+    @patch("screening.services.scoring.embed", return_value=[1.0, 0.0])
+    def test_no_semantic_candidates_fall_back_to_text_embeds(self, mock_embed):
+        # All requirements text-matched -> no JD vector -> text fallback path.
+        result = compute_hybrid_score(
+            "Python developer with React experience",
+            "Skills:\n- Python\n- React",
+            resume_embeddings=[[1.0, 0.0]],
+        )
+        self.assertEqual(mock_embed.call_count, 2)
+        self.assertEqual(result["scoreBreakdown"]["embeddingSimilarity"], 100)
 
 
 class RequirementMatchTests(SimpleTestCase):

@@ -233,6 +233,16 @@ def _cached_embed_many(texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
     return tuple(tuple(item) for item in embeddings)
 
 
+def _mean_vector(vectors: list[list[float] | tuple[float, ...]]) -> tuple[float, ...] | None:
+    """Mean of embedding vectors, representing the whole pooled document."""
+    if not vectors:
+        return None
+    dim = len(vectors[0])
+    if dim == 0:
+        return None
+    return tuple(sum(v[i] for v in vectors) / len(vectors) for i in range(dim))
+
+
 def _build_resume_embeddings(
     resume_text: str,
     resume_embeddings: list[list[float]] | None,
@@ -252,6 +262,7 @@ def requirement_match_score(
     resume_lookup = _normalize_lookup(resume_text)
     requirements = _extract_jd_requirements(jd_text)
     chunk_embeddings = _build_resume_embeddings(resume_text, resume_embeddings)
+    resume_vector = _mean_vector(chunk_embeddings)
 
     if not requirements:
         return {
@@ -260,6 +271,8 @@ def requirement_match_score(
             "missingSkills": [],
             "jdSkillCount": 0,
             "semanticThreshold": SEMANTIC_MATCH_THRESHOLD,
+            "resumeVector": resume_vector,
+            "jdVector": None,
         }
 
     text_matched: dict[str, bool] = {}
@@ -271,8 +284,11 @@ def requirement_match_score(
             semantic_candidates.append(requirement)
 
     # Embed every requirement that needs the semantic fallback in ONE batched
-    # Ollama call, then score them against the resume chunk embeddings.
+    # Ollama call, then score them against the resume chunk embeddings. The
+    # mean of those requirement vectors also doubles as the JD vector, so the
+    # global embedding-similarity step needs no extra Ollama calls.
     semantic_scores: dict[str, float] = {}
+    jd_vectors: list[tuple[float, ...]] = []
     if semantic_candidates and chunk_embeddings:
         snippets = tuple(req[:EMBED_TEXT_LIMIT] for req in semantic_candidates)
         embeddings = _cached_embed_many(snippets)
@@ -281,6 +297,7 @@ def requirement_match_score(
                 _cosine_similarity(requirement_embedding, chunk_embedding)
                 for chunk_embedding in chunk_embeddings
             )
+            jd_vectors.append(requirement_embedding)
 
     matched: list[str] = []
     missing: list[str] = []
@@ -300,18 +317,28 @@ def requirement_match_score(
         "missingSkills": missing,
         "jdSkillCount": len(requirements),
         "semanticThreshold": SEMANTIC_MATCH_THRESHOLD,
+        "resumeVector": resume_vector,
+        "jdVector": _mean_vector(jd_vectors),
     }
 
 
-def embedding_similarity_score(resume_text: str, jd_text: str) -> float:
+def embedding_similarity_score(
+    resume_vector: list[float] | tuple[float, ...],
+    jd_vector: list[float] | tuple[float, ...],
+) -> float:
+    """Global similarity between pooled resume and JD vectors (0-100)."""
+    similarity = _cosine_similarity(resume_vector, jd_vector)
+    return max(0.0, min(1.0, similarity)) * 100
+
+
+def _embedding_similarity_text(resume_text: str, jd_text: str) -> float:
+    """Fallback: embed full snippets when no reusable vectors exist."""
     resume_snippet = resume_text[:EMBED_TEXT_LIMIT]
     jd_snippet = jd_text[:EMBED_TEXT_LIMIT]
-
-    resume_embedding = _cached_embed(resume_snippet)
-    jd_embedding = _cached_embed(jd_snippet)
-    similarity = _cosine_similarity(resume_embedding, jd_embedding)
-
-    return max(0.0, min(1.0, similarity)) * 100
+    return embedding_similarity_score(
+        _cached_embed(resume_snippet),
+        _cached_embed(jd_snippet),
+    )
 
 
 def compute_hybrid_score(
@@ -321,7 +348,15 @@ def compute_hybrid_score(
 ) -> dict:
     overlap = requirement_match_score(resume_text, jd_text, resume_embeddings)
     skill_score = overlap["score"]
-    embed_score = embedding_similarity_score(resume_text, jd_text)
+
+    # Reuse embeddings already computed during matching: no extra Ollama calls
+    # when both vectors are available.
+    resume_vector = overlap.get("resumeVector")
+    jd_vector = overlap.get("jdVector")
+    if resume_vector and jd_vector:
+        embed_score = embedding_similarity_score(resume_vector, jd_vector)
+    else:
+        embed_score = _embedding_similarity_text(resume_text, jd_text)
 
     if overlap["jdSkillCount"] == 0:
         final_score = embed_score
