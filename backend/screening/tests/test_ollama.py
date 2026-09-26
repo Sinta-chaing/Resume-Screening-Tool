@@ -58,6 +58,36 @@ class EmbedManyTests(SimpleTestCase):
         with self.assertRaises(RuntimeError):
             ollama.embed_many(["a"])
 
+    @patch("requests.post")
+    def test_embed_many_sub_batches_large_inputs(self, mock_post):
+        # More inputs than EMBED_BATCH_SIZE must be split into several calls
+        # (each returning quickly) while preserving the original order.
+        batch = ollama.EMBED_BATCH_SIZE
+        texts = [f"chunk {i}" for i in range(batch * 3 + 1)]
+        mock_post.side_effect = [
+            FakeResponse(
+                payload={
+                    "embeddings": [[float(i)] for i in range(batch * n, batch * (n + 1))]
+                }
+            )
+            for n in range(3)
+        ] + [FakeResponse(payload={"embeddings": [[float(batch * 3)]]})]
+
+        result = ollama.embed_many(texts)
+
+        self.assertEqual(mock_post.call_count, 4)
+        sent = [call.kwargs["json"]["input"] for call in mock_post.call_args_list]
+        self.assertEqual(len(sent[0]), batch)
+        self.assertEqual(len(sent[-1]), 1)
+        flattened = [item for batch_inputs in sent for item in batch_inputs]
+        self.assertEqual(flattened, texts)
+        self.assertEqual(result, [[float(i)] for i in range(batch * 3 + 1)])
+
+    @patch("requests.post")
+    def test_embed_many_empty_returns_empty_without_calls(self, mock_post):
+        self.assertEqual(ollama.embed_many([]), [])
+        mock_post.assert_not_called()
+
 
 class ChatTests(SimpleTestCase):
     @patch("requests.post")

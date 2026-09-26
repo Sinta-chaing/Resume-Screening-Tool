@@ -1,6 +1,11 @@
 import requests
 from django.conf import settings
 
+# Subsample the batch so a single Ollama /api/embed call finishes well under
+# the HTTP read timeout even on a small CPU-only server. Chunks are embedded
+# sequentially server-side, so a huge batch can stall the whole request.
+EMBED_BATCH_SIZE = 16
+
 
 def embed(text: str) -> list[float]:
     """Generate an embedding vector via Ollama (single input)."""
@@ -8,13 +13,23 @@ def embed(text: str) -> list[float]:
 
 
 def embed_many(texts: list[str]) -> list[list[float]]:
-    """Generate embeddings for a batch of texts in one Ollama /api/embed call.
+    """Generate embeddings for a batch of texts in one (or a few) Ollama calls.
 
     Officially supported payload: ``input`` accepts either a string or an array
     of strings; ``embeddings`` in the response are returned in the same order.
     ``truncate=True`` cuts long inputs to the model's context window
     (mxbai-embed-large = 512 tokens) instead of erroring.
     """
+    if not texts:
+        return []
+
+    embeddings: list[list[float]] = []
+    for start in range(0, len(texts), EMBED_BATCH_SIZE):
+        embeddings.extend(_embed_batch(texts[start : start + EMBED_BATCH_SIZE]))
+    return embeddings
+
+
+def _embed_batch(texts: list[str]) -> list[list[float]]:
     url = f"{settings.OLLAMA_BASE_URL}/api/embed"
     payload = {
         "model": settings.EMBEDDING_MODEL,
