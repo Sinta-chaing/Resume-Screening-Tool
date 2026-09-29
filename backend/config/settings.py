@@ -117,17 +117,12 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 # NOTE: the embedding model's output dimension MUST match ResumeChunk.embedding
 # (VectorField) in screening/models.py (currently 1024 -> mxbai-embed-large).
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "mxbai-embed-large")
-CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen2.5:0.5b")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "llama3.2:3b")
 # How long to keep a model loaded in Ollama's memory after its last use.
-# "0" unloads immediately (lowest RAM, reload cost per call). The 3.7GB box
-# uses a small chat model (qwen2.5:0.5b, ~400MB), so the embed model
-# (~700MB) and chat model together fit in RAM comfortably. Keeping the embed
-# model warm avoids reloading it for every phase of every job (the dominant
-# cost on a CPU-only box) and serves the RAG chat between analyses:
-#   - embed model: 10m -> covers chunk + semantic embeds, stays for next job
-#   - chat model: 10m  -> covers the report calls and the RAG chat endpoint
-# Accepted by Ollama as a duration like "5m"/"1h" or an epoch integer;
-# "0" disables persistence. Set OLLAMA_KEEP_ALIVE to override both.
+# "0" unloads immediately (lowest RAM, reload cost per call). A 12GB server
+# holds llama3.2:3b (~2GB) plus mxbai-embed-large (~700MB) comfortably, so the
+# models stay warm across phases and consecutive jobs (reloads are the biggest
+# per-job cost on a CPU-only box). Set OLLAMA_KEEP_ALIVE to override both.
 OLLAMA_EMBED_KEEP_ALIVE = os.environ.get(
     "OLLAMA_EMBED_KEEP_ALIVE",
     os.environ.get("OLLAMA_KEEP_ALIVE", "10m"),

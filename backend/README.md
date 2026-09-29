@@ -7,7 +7,7 @@
 
 - Python 3.12+
 - PostgreSQL 15+ with **pgvector** extension
-- Ollama with `mxbai-embed-large` and `qwen2.5:0.5b`
+- Ollama with `mxbai-embed-large` and `llama3.2:3b`
 
 ## 1. Install pgvector on PostgreSQL (Windows)
 
@@ -144,9 +144,9 @@ returns `202 Accepted` right away.
   LLM models at once.
 - `OLLAMA_EMBED_KEEP_ALIVE` (default `10m`) and `OLLAMA_CHAT_KEEP_ALIVE`
   (default `10m`) control how long each model stays loaded in Ollama's RAM.
-  With a small chat model (`qwen2.5:0.5b`) plus `mxbai-embed-large` both fit
-  in the 3.7GB server, so models stay warm across phases and consecutive jobs
-  (avoiding reloads, which are the biggest per-job cost on a CPU-only box).
+  With `llama3.2:3b` plus `mxbai-embed-large` both fit comfortably in a 12GB
+  server, so models stay warm across phases and consecutive jobs (avoiding
+  reloads, which are the biggest per-job cost on a CPU-only box).
   Set `OLLAMA_KEEP_ALIVE` to override both, or `0` to unload after every call.
 - Embeddings are sent **batched**: all resume chunks and all requirement
   snippets are embedded in one `/api/embed` call each instead of dozens.
@@ -163,6 +163,6 @@ Original Express backend: `backend-node/`
 Run Model + Chat model comparison and generate charts:
 
 ```powershell
-python benchmark.py                 # default: mxbai-embed-large x qwen2.5:0.5b
+python benchmark.py                 # default: mxbai-embed-large x llama3.2:3b
 python plot_results.py              # writes benchmark_chart.png
 ```

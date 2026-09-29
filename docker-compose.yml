@@ -4,7 +4,7 @@
 #   cp .env.example .env   # then edit secrets/values
 #   docker compose up -d db ollama api
 #   docker compose exec ollama ollama pull mxbai-embed-large
-#   docker compose exec ollama ollama pull qwen2.5:0.5b
+#   docker compose exec ollama ollama pull llama3.2:3b
 #   # create the Cloudflare tunnel, put its token in .env, then:
 #   docker compose up -d cloudflared
 name: resume-screener
