@@ -1,46 +1,75 @@
-# Backend + PostgreSQL (pgvector) for production-like local Docker hosting.
-# Ollama is NOT included here (GPU/VRAM dependent) - see docker-compose.full.yml.
+# Resume Screening Tool - Docker Compose stack (API + Ollama + PostgreSQL + Cloudflare Tunnel)
 #
-# Usage:
-#   cp backend/.env.example backend/.env   # then set at least:
-#     DB_HOST=db                            # connect to the docker service, not 127.0.0.1
-#   docker compose up -d --build
-#   curl http://localhost:8000/api/health
+# Usage on a fresh server:
+#   cp .env.example .env   # then edit secrets/values
+#   docker compose up -d db ollama api
+#   docker compose exec ollama ollama pull mxbai-embed-large
+#   docker compose exec ollama ollama pull qwen2.5:0.5b
+#   # create the Cloudflare tunnel, put its token in .env, then:
+#   docker compose up -d cloudflared
+name: resume-screener
 
 services:
   db:
-    image: pgvector/pgvector:pg18
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    env_file: .env
     environment:
       POSTGRES_DB: ${DB_NAME:-resume_screener}
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
-    ports:
-      - "5433:5432"            # host port 5433 avoids clashing with a local PostgreSQL
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-resume_screener}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 12
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
   api:
-    build:
-      context: ./backend
-    env_file:
-      - ./backend/.env
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
     environment:
-      # Reach an Ollama running on the host (plain compose). Set
-      # OLLAMA_BASE_URL=http://ollama:11434 when using docker-compose.full.yml.
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      DB_HOST: db
+      DB_PORT: "5432"
+      OLLAMA_BASE_URL: http://ollama:11434
+    ports:
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/api/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
-  pgdata:
+  pg_data:
+  ollama_data:
